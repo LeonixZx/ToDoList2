@@ -70,5 +70,6 @@ dependencies {
     implementation(libs.androidx.compose.runtime.livedata)
     implementation(libs.androidx.compose.runtime.rxjava2)
     implementation(libs.gson)
-    implementation("com.google.android.gms:play-services-ads:22.5.0")
+//    implementation("com.google.android.gms:play-services-ads:22.5.0")
+    implementation(libs.play.services.ads)
 }
