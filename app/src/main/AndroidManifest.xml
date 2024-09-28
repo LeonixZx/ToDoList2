@@ -11,7 +11,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ToDoList"
+        android:name=".TodoApplication"
         tools:targetApi="31">
+
+        <!-- AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-2107817689571311~9982103350"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -19,7 +26,6 @@
             android:theme="@style/Theme.ToDoList">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>

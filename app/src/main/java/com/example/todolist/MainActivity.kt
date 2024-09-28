@@ -19,16 +19,24 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.todolist.ui.theme.MacOSTheme
-import com.example.todolist.ui.theme.MacOSColors
+
 
 class MainActivity : ComponentActivity() {
+    private lateinit var adMobManager: AdMobManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        adMobManager = (application as TodoApplication).adMobManager
         setContent {
             MacOSTheme {
                 TodoApp()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        adMobManager.showAdIfAvailable(this)
     }
 }
 
