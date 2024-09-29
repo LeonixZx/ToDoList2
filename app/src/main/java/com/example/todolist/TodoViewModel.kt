@@ -1,76 +1,89 @@
 package com.example.todolist
 
 import android.app.Application
+import android.content.ContentResolver
+import android.net.Uri
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import java.util.*
-
-enum class SortOption {
-    TIME, NAME
-}
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TodoViewModel(application: Application) : AndroidViewModel(application) {
+    private val repository = TodoRepository(application)
     private val _todos = mutableStateListOf<Todo>()
     val todos: List<Todo> = _todos
-
-    private val prefs = application.getSharedPreferences("TodoPrefs", Application.MODE_PRIVATE)
     private val gson = Gson()
 
     init {
-        loadTodos()
+        loadTasks()
     }
 
-    private fun loadTodos() {
-        val todosJson = prefs.getString("todos", null)
-        if (todosJson != null) {
-            val type = object : TypeToken<List<Todo>>() {}.type
-            val loadedTodos = gson.fromJson<List<Todo>>(todosJson, type)
-            _todos.addAll(loadedTodos)
+    private fun loadTasks() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val loadedTodos = repository.loadTasks()
+            withContext(Dispatchers.Main) {
+                _todos.clear()
+                _todos.addAll(loadedTodos)
+            }
         }
     }
 
-    private fun saveTodos() {
-        val todosJson = gson.toJson(_todos)
-        prefs.edit().putString("todos", todosJson).apply()
-    }
-
-    fun getTodos(query: String, sortOption: SortOption): List<Todo> {
-        return _todos.filter { it.task.contains(query, ignoreCase = true) }
-            .sortedWith(when (sortOption) {
-                SortOption.TIME -> compareByDescending { it.createdAt }
-                SortOption.NAME -> compareBy { it.task.lowercase(Locale.getDefault()) }
-            })
-    }
-
     fun addTodo(task: String) {
-        _todos.add(Todo(id = (_todos.maxOfOrNull { it.id } ?: 0) + 1, task = task))
-        saveTodos()
+        viewModelScope.launch {
+            val newTodo = Todo(id = (_todos.maxOfOrNull { it.id } ?: 0) + 1, task = task)
+            _todos.add(newTodo)
+            saveTasks()
+        }
     }
 
     fun toggleTodo(id: Int) {
-        val index = _todos.indexOfFirst { it.id == id }
-        if (index != -1) {
-            _todos[index] = _todos[index].copy(isCompleted = !_todos[index].isCompleted)
-            saveTodos()
+        viewModelScope.launch {
+            val index = _todos.indexOfFirst { it.id == id }
+            if (index != -1) {
+                _todos[index] = _todos[index].copy(isCompleted = !_todos[index].isCompleted)
+                saveTasks()
+            }
         }
     }
 
     fun deleteTodo(id: Int) {
-        _todos.removeAll { it.id == id }
-        saveTodos()
-    }
-
-    fun moveTodo(fromIndex: Int, toIndex: Int) {
-        if (fromIndex in _todos.indices && toIndex in _todos.indices && fromIndex != toIndex) {
-            val todo = _todos.removeAt(fromIndex)
-            _todos.add(toIndex, todo)
-            saveTodos()
+        viewModelScope.launch {
+            _todos.removeAll { it.id == id }
+            saveTasks()
         }
     }
 
+    private fun saveTasks() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.saveTasks(_todos)
+        }
+    }
 
+    fun exportTasks(contentResolver: ContentResolver, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(gson.toJson(_todos).toByteArray())
+            }
+        }
+    }
+
+    fun importTasks(contentResolver: ContentResolver, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                val jsonString = inputStream.bufferedReader().use { it.readText() }
+                val importedTodos = gson.fromJson<List<Todo>>(jsonString, object : TypeToken<List<Todo>>() {}.type)
+                withContext(Dispatchers.Main) {
+                    _todos.clear()
+                    _todos.addAll(importedTodos)
+                }
+                saveTasks()
+            }
+        }
+    }
 
     fun getTodos(query: String, category: TaskCategory): List<Todo> {
         return _todos.filter { todo ->
@@ -82,6 +95,4 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
                     }
         }
     }
-
-
 }

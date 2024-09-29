@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
+
 object AppColors {
     val Primary = Color(0xFF5B67CA)
     val Secondary = Color(0xFFFF6B6B)
@@ -29,26 +30,26 @@ object AppColors {
     val LightText = Color(0xFF7C7C7C)
 }
 
-private val LightColorScheme = lightColorScheme(
-    primary = AppColors.Primary,
-    secondary = AppColors.Secondary,
-    background = AppColors.Background,
-    surface = AppColors.Surface,
-    onPrimary = AppColors.OnPrimary,
-    onSecondary = AppColors.OnSecondary,
-    onBackground = AppColors.OnBackground,
-    onSurface = AppColors.OnSurface
-)
-
 private val DarkColorScheme = darkColorScheme(
-    primary = AppColors.Primary,
-    secondary = AppColors.Secondary,
-    background = Color(0xFF1E1E1E),
-    surface = Color(0xFF2D2D2D),
-    onPrimary = AppColors.OnPrimary,
-    onSecondary = AppColors.OnSecondary,
+    primary = Color(0xFF4CAF50),
+    secondary = Color(0xFF03DAC6),
+    background = Color(0xFF121212),
+    surface = Color(0xFF1E1E1E),
+    onPrimary = Color.White,
+    onSecondary = Color.Black,
     onBackground = Color.White,
     onSurface = Color.White
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = Color(0xFF4CAF50),
+    secondary = Color(0xFF03DAC6),
+    background = Color.White,
+    surface = Color(0xFFF5F5F5),
+    onPrimary = Color.White,
+    onSecondary = Color.Black,
+    onBackground = Color.Black,
+    onSurface = Color.Black
 )
 
 @Composable

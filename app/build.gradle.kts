@@ -72,4 +72,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("com.google.android.gms:play-services-ads:22.5.0")
     implementation("androidx.multidex:multidex:2.0.1")
+    implementation("com.google.code.gson:gson:2.8.9")
+    implementation("androidx.compose.material:material-icons-extended:1.5.4")
+    implementation("androidx.compose.material3:material3:1.1.0")
 }
