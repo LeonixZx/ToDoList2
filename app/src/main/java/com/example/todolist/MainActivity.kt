@@ -34,6 +34,22 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.draw.shadow
 
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.style.TextDecoration
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.text.style.TextOverflow
+
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CheckCircleOutline
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.Upload
 
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
@@ -502,40 +518,65 @@ fun TodoList(todos: List<Todo>, onToggleTodo: (Int) -> Unit, onDeleteTodo: (Int)
 @Composable
 fun TodoItem(todo: Todo, onToggle: (Int) -> Unit, onDelete: (Int) -> Unit) {
     var showDeletePrompt by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(60.dp)
+            .animateContentSize() // Add smooth animation for expansion
             .combinedClickable(
-                onClick = { /* Regular click does nothing */ },
+                onClick = { expanded = !expanded }, // Toggle expansion on click
                 onLongClick = { showDeletePrompt = true },
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = if (todo.isCompleted) Color.LightGray.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.Top // Change to Top alignment
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = todo.task,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (todo.isCompleted) Color.Gray else Color.Black,
+                        textDecoration = if (todo.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+                    ),
+                    maxLines = if (expanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.alpha(if (todo.isCompleted) 0.7f else 1f)
                 )
-                Text(
-                    text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
+                AnimatedVisibility(visible = expanded || todo.task.length <= 100) {
+                    Text(
+                        text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            color = if (todo.isCompleted) Color.Gray.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
-            TaskStatusChip(completed = todo.isCompleted, onClick = { onToggle(todo.id) })
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                TaskStatusChip(completed = todo.isCompleted, onClick = { onToggle(todo.id) })
+                if (todo.task.length > 100) {
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (expanded) "Collapse" else "Expand"
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -565,10 +606,11 @@ fun TodoItem(todo: Todo, onToggle: (Int) -> Unit, onDelete: (Int) -> Unit) {
 fun TaskStatusChip(completed: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (completed) AppColors.LightGreen else AppColors.LightPink,
-        contentColor = if (completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-        modifier = Modifier.height(24.dp)
+        shape = RoundedCornerShape(16.dp),
+        color = if (completed) AppColors.LightGreen.copy(alpha = 0.6f) else AppColors.LightPink,
+        contentColor = if (completed) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.secondary,
+        modifier = Modifier
+            .height(24.dp)
     ) {
         Text(
             text = if (completed) "Done" else "Todo",
