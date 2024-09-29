@@ -69,4 +69,19 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
             saveTodos()
         }
     }
+
+
+
+    fun getTodos(query: String, category: TaskCategory): List<Todo> {
+        return _todos.filter { todo ->
+            (todo.task.contains(query, ignoreCase = true)) &&
+                    when (category) {
+                        TaskCategory.TODO -> !todo.isCompleted
+                        TaskCategory.DONE -> todo.isCompleted
+                        TaskCategory.ALL -> true
+                    }
+        }
+    }
+
+
 }
