@@ -20,6 +20,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.todolist.ui.theme.MacOSTheme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.graphics.Color
+import java.text.SimpleDateFormat
+import java.util.*
+
 
 class MainActivity : ComponentActivity() {
     private lateinit var adMobManager: AdMobManager
@@ -44,6 +50,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun TodoApp(todoViewModel: TodoViewModel = viewModel()) {
     var newTodoText by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var sortOption by remember { mutableStateOf(SortOption.TIME) }
 
     Scaffold(
         topBar = {
@@ -62,6 +70,14 @@ fun TodoApp(todoViewModel: TodoViewModel = viewModel()) {
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
+            SearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it }
+            )
+            SortingOptions(
+                currentOption = sortOption,
+                onOptionSelected = { sortOption = it }
+            )
             TodoInput(
                 value = newTodoText,
                 onValueChange = { newTodoText = it },
@@ -74,13 +90,38 @@ fun TodoApp(todoViewModel: TodoViewModel = viewModel()) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             TodoList(
-                todos = todoViewModel.todos,
+                todos = todoViewModel.getTodos(searchQuery, sortOption),
                 onToggleTodo = { todoViewModel.toggleTodo(it) },
                 onDeleteTodo = { todoViewModel.deleteTodo(it) }
             )
         }
     }
 }
+
+@Composable
+fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text("Search") },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+    )
+}
+
+@Composable
+fun SortingOptions(currentOption: SortOption, onOptionSelected: (SortOption) -> Unit) {
+    Row {
+        SortOption.values().forEach { option ->
+            RadioButton(
+                selected = currentOption == option,
+                onClick = { onOptionSelected(option) }
+            )
+            Text(option.name)
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,58 +148,61 @@ fun TodoInput(value: String, onValueChange: (String) -> Unit, onAddTodo: () -> U
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodoList(
     todos: List<Todo>,
     onToggleTodo: (Int) -> Unit,
     onDeleteTodo: (Int) -> Unit
 ) {
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(todos) { todo ->
-            TodoItem(todo, onToggleTodo, onDeleteTodo)
+    LazyColumn {
+        items(todos, key = { it.id }) { todo ->
+            TodoItem(
+                todo = todo,
+                onToggle = { onToggleTodo(todo.id) },
+                onDelete = { onDeleteTodo(todo.id) },
+                modifier = Modifier.animateItemPlacement()
+            )
         }
     }
 }
 
 @Composable
-fun TodoItem(todo: Todo, onToggleTodo: (Int) -> Unit, onDeleteTodo: (Int) -> Unit) {
-    Surface(
-        modifier = Modifier
+fun TodoItem(todo: Todo, onToggle: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp)),
-        color = if (todo.isCompleted) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp
+            .padding(vertical = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp, horizontal = 16.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(
-                checked = todo.isCompleted,
-                onCheckedChange = { onToggleTodo(todo.id) },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            )
-            Text(
-                text = todo.task,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp),
-                style = MaterialTheme.typography.bodyLarge.copy(
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = todo.task,
+                    style = MaterialTheme.typography.bodyLarge,
                     textDecoration = if (todo.isCompleted) TextDecoration.LineThrough else TextDecoration.None
-                ),
-                color = if (todo.isCompleted) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
-            )
-            IconButton(onClick = { onDeleteTodo(todo.id) }) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete todo",
-                    tint = MaterialTheme.colorScheme.error
                 )
+                Text(
+                    text = SimpleDateFormat("MMM dd, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            AssistChip(
+                onClick = { onToggle() },
+                label = { Text(if (todo.isCompleted) "Completed" else "Pending") },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (todo.isCompleted) Color(0xFF4CAF50) else Color(0xFFFFA000)
+                )
+            )
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete")
             }
         }
     }

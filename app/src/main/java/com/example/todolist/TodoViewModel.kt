@@ -5,6 +5,11 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import java.util.*
+
+enum class SortOption {
+    TIME, NAME
+}
 
 class TodoViewModel(application: Application) : AndroidViewModel(application) {
     private val _todos = mutableStateListOf<Todo>()
@@ -31,8 +36,16 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putString("todos", todosJson).apply()
     }
 
+    fun getTodos(query: String, sortOption: SortOption): List<Todo> {
+        return _todos.filter { it.task.contains(query, ignoreCase = true) }
+            .sortedWith(when (sortOption) {
+                SortOption.TIME -> compareByDescending { it.createdAt }
+                SortOption.NAME -> compareBy { it.task.lowercase(Locale.getDefault()) }
+            })
+    }
+
     fun addTodo(task: String) {
-        _todos.add(Todo(id = _todos.size + 1, task = task))
+        _todos.add(Todo(id = (_todos.maxOfOrNull { it.id } ?: 0) + 1, task = task))
         saveTodos()
     }
 
@@ -47,5 +60,13 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteTodo(id: Int) {
         _todos.removeAll { it.id == id }
         saveTodos()
+    }
+
+    fun moveTodo(fromIndex: Int, toIndex: Int) {
+        if (fromIndex in _todos.indices && toIndex in _todos.indices && fromIndex != toIndex) {
+            val todo = _todos.removeAt(fromIndex)
+            _todos.add(toIndex, todo)
+            saveTodos()
+        }
     }
 }
