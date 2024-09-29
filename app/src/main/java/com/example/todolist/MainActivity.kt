@@ -127,7 +127,8 @@ fun TodoApp(todoViewModel: TodoViewModel = viewModel()) {
 
 @Composable
 fun Greeting(name: String) {
-    val greeting = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+    val calendar = Calendar.getInstance()
+    val greeting = when (calendar.get(Calendar.HOUR_OF_DAY)) {
         in 0..11 -> "Good Morning"
         in 12..16 -> "Good Afternoon"
         in 17..20 -> "Good Evening"
