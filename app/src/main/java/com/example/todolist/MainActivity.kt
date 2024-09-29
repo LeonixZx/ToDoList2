@@ -3,8 +3,13 @@ package com.example.todolist
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,15 +29,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.draw.shadow
+
 
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
+
+    private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let { todoViewModel.exportTasks(contentResolver, it) }
+    }
+
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { todoViewModel.importTasks(contentResolver, it) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             TodoAppTheme {
-                TodoApp(todoViewModel)
+                TodoApp(
+                    todoViewModel,
+                    onExport = { exportLauncher.launch("todos.json") },
+                    onImport = { importLauncher.launch(arrayOf("application/json")) }
+                )
             }
         }
     }
@@ -64,12 +86,46 @@ object AppColors {
     val LightText = Color(0xFF7C7C7C)
 }
 
+enum class SortOrder {
+    DATE_DESC, DATE_ASC, ALPHABET_ASC, ALPHABET_DESC
+}
+
+@Composable
+fun rememberAuroraBackground(): Brush {
+    val colors = listOf(
+        Color(0xFFFF9AA2),
+        Color(0xFFFFB7B2),
+        Color(0xFFFFDAC1),
+        Color(0xFFE2F0CB),
+        Color(0xFFB5EAD7),
+        Color(0xFFC7CEEA)
+    )
+
+    val infiniteTransition = rememberInfiniteTransition()
+    val offset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(10000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    return Brush.verticalGradient(
+        colors = colors,
+        startY = offset * 1000,
+        endY = (offset + 1) * 1000
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TodoApp(todoViewModel: TodoViewModel) {
+fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> Unit) {
     var newTodoText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(TaskCategory.ALL) }
+    var sortOrder by remember { mutableStateOf(SortOrder.DATE_DESC) }
+    var showSortDialog by remember { mutableStateOf(false) }
 
     val gradient = Brush.verticalGradient(
         colors = listOf(
@@ -84,49 +140,211 @@ fun TodoApp(todoViewModel: TodoViewModel) {
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text("Tasks", style = MaterialTheme.typography.titleMedium)
                         CategoryButtons(selectedCategory) { selectedCategory = it }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppColors.LightPurple
-                )
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    if (newTodoText.isNotBlank()) {
-                        todoViewModel.addTodo(newTodoText)
-                        newTodoText = ""
+                actions = {
+                    IconButton(onClick = onExport) {
+                        Icon(Icons.Filled.Upload, contentDescription = "Export", modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = onImport) {
+                        Icon(Icons.Filled.Download, contentDescription = "Import", modifier = Modifier.size(20.dp))
                     }
                 },
-                containerColor = MaterialTheme.colorScheme.primary
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Add")
-            }
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = AppColors.LightPurple
+                ),
+                modifier = Modifier.height(48.dp)
+            )
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .background(brush = gradient)
         ) {
-            SearchBar(
-                query = searchQuery,
-                onQueryChange = { searchQuery = it },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            Greeting()
-            TaskCount(todoViewModel.todos.size)
-            Spacer(modifier = Modifier.height(8.dp))
-            TodoList(
-                todos = todoViewModel.getTodos(searchQuery, selectedCategory),
-                onToggleTodo = { todoViewModel.toggleTodo(it) },
-                onDeleteTodo = { todoViewModel.deleteTodo(it) }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SearchBar(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { showSortDialog = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Filled.Sort, contentDescription = "Sort")
+                    }
+                }
+                AddTodoInput(
+                    value = newTodoText,
+                    onValueChange = { newTodoText = it },
+                    onAddClick = {
+                        if (newTodoText.isNotBlank()) {
+                            todoViewModel.addTodo(newTodoText)
+                            newTodoText = ""
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Greeting()
+                    TaskCount(todoViewModel.todos.size)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                TodoList(
+                    todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
+                        when (sortOrder) {
+                            SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
+                            SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
+                            SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
+                            SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
+                        }
+                    },
+                    onToggleTodo = { todoViewModel.toggleTodo(it) },
+                    onDeleteTodo = { todoViewModel.deleteTodo(it) }
+                )
+            }
+        }
+    }
+
+    if (showSortDialog) {
+        AlertDialog(
+            onDismissRequest = { showSortDialog = false },
+            title = { Text("Sort Tasks") },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.DATE_DESC
+                        showSortDialog = false
+                    }) {
+                        Text("Date (Newest First)")
+                    }
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.DATE_ASC
+                        showSortDialog = false
+                    }) {
+                        Text("Date (Oldest First)")
+                    }
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.ALPHABET_ASC
+                        showSortDialog = false
+                    }) {
+                        Text("Alphabetically (A-Z)")
+                    }
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.ALPHABET_DESC
+                        showSortDialog = false
+                    }) {
+                        Text("Alphabetically (Z-A)")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSortDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun AddTodoInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onAddClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .shadow(4.dp, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.White)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    tint = Color.Gray,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = LocalTextStyle.current.copy(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.Black
+                    ),
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (value.isEmpty()) {
+                                Text(
+                                    "Enter new task",
+                                    color = Color.Gray,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Normal
+                                )
+                            }
+                            innerTextField()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 8.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Button(
+            onClick = onAddClick,
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier
+                .height(48.dp)
+                .shadow(4.dp, RoundedCornerShape(24.dp)),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3))
+        ) {
+            Text(
+                "Add",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.White
             )
         }
     }
@@ -178,29 +396,70 @@ fun CategoryButton(
             else
                 MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium)
+        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
+        Spacer(modifier = Modifier.width(2.dp))
+        Text(text, style = MaterialTheme.typography.labelSmall)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchBar(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
+    val gradient = Brush.horizontalGradient(
+        colors = listOf(Color(0xFF1E88E5), Color(0xFF42A5F5))
+    )
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp),
-        placeholder = { Text("Search", style = MaterialTheme.typography.bodySmall) },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-        singleLine = true,
-        textStyle = MaterialTheme.typography.bodySmall,
-        shape = RoundedCornerShape(24.dp)
-    )
+            .height(48.dp)
+            .shadow(4.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(brush = gradient)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White
+                ),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (query.isEmpty()) {
+                            Text(
+                                "Search",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 8.dp)
+            )
+        }
+    }
 }
 
 @Composable
@@ -213,17 +472,15 @@ fun Greeting() {
     }
     Text(
         text = greeting,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        style = MaterialTheme.typography.bodyMedium
     )
 }
 
 @Composable
 fun TaskCount(count: Int) {
     Text(
-        text = "$count tasks this month",
-        style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(horizontal = 16.dp)
+        text = "$count tasks",
+        style = MaterialTheme.typography.bodySmall
     )
 }
 
@@ -231,8 +488,8 @@ fun TaskCount(count: Int) {
 fun TodoList(todos: List<Todo>, onToggleTodo: (Int) -> Unit, onDeleteTodo: (Int) -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(todos) { todo ->
             TodoItem(todo, onToggleTodo, onDeleteTodo)
@@ -240,36 +497,37 @@ fun TodoList(todos: List<Todo>, onToggleTodo: (Int) -> Unit, onDeleteTodo: (Int)
     }
 }
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodoItem(todo: Todo, onToggle: (Int) -> Unit, onDelete: (Int) -> Unit) {
+    var showDeletePrompt by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            .height(60.dp)
+            .combinedClickable(
+                onClick = { /* Regular click does nothing */ },
+                onLongClick = { showDeletePrompt = true },
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(
-                checked = todo.isCompleted,
-                onCheckedChange = { onToggle(todo.id) },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = MaterialTheme.colorScheme.primary,
-                    uncheckedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            )
-            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = todo.task,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
                 )
                 Text(
                     text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
@@ -280,20 +538,42 @@ fun TodoItem(todo: Todo, onToggle: (Int) -> Unit, onDelete: (Int) -> Unit) {
             TaskStatusChip(completed = todo.isCompleted, onClick = { onToggle(todo.id) })
         }
     }
+
+    if (showDeletePrompt) {
+        AlertDialog(
+            onDismissRequest = { showDeletePrompt = false },
+            title = { Text("Delete Task") },
+            text = { Text("Are you sure you want to delete this task?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(todo.id)
+                    showDeletePrompt = false
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeletePrompt = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun TaskStatusChip(completed: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (completed) AppColors.LightGreen else AppColors.LightPink,
-        contentColor = if (completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+        contentColor = if (completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+        modifier = Modifier.height(24.dp)
     ) {
         Text(
             text = if (completed) "Done" else "Todo",
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
@@ -301,3 +581,6 @@ fun TaskStatusChip(completed: Boolean, onClick: () -> Unit) {
 enum class TaskCategory {
     TODO, DONE, ALL
 }
+
+
+
