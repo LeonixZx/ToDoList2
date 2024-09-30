@@ -84,10 +84,25 @@ import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.AdListener
+import com.google.android.gms.ads.MobileAds
+import android.provider.Settings
+
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import kotlin.math.pow
+import kotlin.random.Random
+
 
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
     private var interstitialAd: InterstitialAd? = null
+
+    private fun getAdMobDeviceId() {
+        val adRequest = AdRequest.Builder().build()
+        val adId = adRequest.hashCode().toString() // Use hashCode as a fallback
+        Log.d("DeviceID", "AdMob Device ID: $adId")
+    }
 
     private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { todoViewModel.exportTasks(contentResolver, it) }
@@ -100,6 +115,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        Log.d("TestDeviceID", "Use this ID for testing: $deviceId")
+
         // Initialize AdMob
         MobileAds.initialize(this) { initializationStatus ->
             val statusMap = initializationStatus.adapterStatusMap
@@ -107,6 +125,12 @@ class MainActivity : ComponentActivity() {
                 Log.d("AdMob", "Adapter name: $adapterClass, Description: ${status.description}, Latency: ${status.latency}")
             }
         }
+
+        // Initialize AdManager
+        AdManager.initialize(this)
+
+        // Call getAdMobDeviceId() here
+        getAdMobDeviceId()
 
         // Load the interstitial ad
         loadInterstitialAd()
@@ -132,7 +156,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun loadInterstitialAd(retryCount: Int = 0, maxRetries: Int = 3) {
+    private fun loadInterstitialAd() {
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             this,
@@ -170,15 +194,47 @@ class MainActivity : ComponentActivity() {
                         else -> Log.e("AdMob", "Unknown error occurred")
                     }
                     interstitialAd = null
-                    if (retryCount < maxRetries) {
-                        Log.d("AdMob", "Retrying ad load. Attempt ${retryCount + 1}")
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            loadInterstitialAd(retryCount + 1, maxRetries)
-                        }, 5000) // Wait 5 seconds before retrying
-                    }
+                    retryWithExponentialBackoff { loadInterstitialAd() }
                 }
             }
         )
+    }
+
+    private fun retryWithExponentialBackoff(
+        attemptNumber: Int = 0,
+        maxAttempts: Int = 3,
+        initialDelay: Long = 1000,
+        maxDelay: Long = 60000,
+        factor: Double = 2.0,
+        action: () -> Unit
+    ) {
+        if (attemptNumber >= maxAttempts) {
+            Log.e("AdMob", "Max retry attempts reached")
+            return
+        }
+
+        val delay = (initialDelay * factor.pow(attemptNumber.toDouble())).toLong().coerceAtMost(maxDelay)
+        val jitter = Random.nextLong(delay / 2)
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (isNetworkAvailable()) {
+                action()
+            } else {
+                Log.e("AdMob", "No network connection, retrying later")
+                retryWithExponentialBackoff(attemptNumber + 1, maxAttempts, initialDelay, maxDelay, factor, action)
+            }
+        }, delay + jitter)
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities != null && (
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                )
     }
 
     @Composable
@@ -1021,14 +1077,14 @@ fun AdMobBanner(modifier: Modifier = Modifier) {
         factory = { context ->
             AdView(context).apply {
                 setAdSize(AdSize.BANNER)
-                adUnitId = "ca-app-pub-3940256099942544/630097811112" // Test ad unit ID
-                loadAd(AdRequest.Builder().build())
+                adUnitId = "ca-app-pub-3940256099942544/6300978111" // Your mediated banner ad unit ID
+                loadAd(AdManager.createAdRequest())
                 adListener = object : AdListener() {
                     override fun onAdLoaded() {
-                        Log.d("AdMob", "Banner ad loaded successfully")
+                        Log.d("AdMob", "Mediated banner ad loaded successfully")
                     }
                     override fun onAdFailedToLoad(error: LoadAdError) {
-                        Log.e("AdMob", "Banner ad failed to load. Error: ${error.message}")
+                        Log.e("AdMob", "Mediated banner ad failed to load. Error: ${error.message}")
                         Log.e("AdMob", "Error code: ${error.code}")
                         Log.e("AdMob", "Error domain: ${error.domain}")
                         when (error.code) {
@@ -1041,16 +1097,16 @@ fun AdMobBanner(modifier: Modifier = Modifier) {
                         }
                     }
                     override fun onAdOpened() {
-                        Log.d("AdMob", "Banner ad opened")
+                        Log.d("AdMob", "Mediated banner ad opened")
                     }
                     override fun onAdClicked() {
-                        Log.d("AdMob", "Banner ad clicked")
+                        Log.d("AdMob", "Mediated banner ad clicked")
                     }
                     override fun onAdClosed() {
-                        Log.d("AdMob", "Banner ad closed")
+                        Log.d("AdMob", "Mediated banner ad closed")
                     }
                     override fun onAdImpression() {
-                        Log.d("AdMob", "Banner ad impression recorded")
+                        Log.d("AdMob", "Mediated banner ad impression recorded")
                     }
                 }
             }
@@ -1066,37 +1122,37 @@ fun AdMobInterstitial(onAdClosed: () -> Unit) {
     LaunchedEffect(Unit) {
         InterstitialAd.load(
             context,
-            "ca-app-pub-3940256099942544/1033173712", // Test ad unit ID
-            AdRequest.Builder().build(),
+            "ca-app-pub-3940256099942544/1033173712", // Your mediated interstitial ad unit ID
+            AdManager.createAdRequest(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
-                    Log.d("AdMob", "Interstitial ad loaded successfully")
+                    Log.d("AdMob", "Mediated interstitial ad loaded successfully")
                     interstitialAd = ad
                     ad.fullScreenContentCallback = object : FullScreenContentCallback() {
                         override fun onAdDismissedFullScreenContent() {
-                            Log.d("AdMob", "Interstitial ad was dismissed")
+                            Log.d("AdMob", "Mediated interstitial ad was dismissed")
                             interstitialAd = null
                             onAdClosed()
                         }
                         override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                            Log.e("AdMob", "Interstitial ad failed to show. Error: ${adError.message}")
+                            Log.e("AdMob", "Mediated interstitial ad failed to show. Error: ${adError.message}")
                             interstitialAd = null
                             onAdClosed()
                         }
                         override fun onAdShowedFullScreenContent() {
-                            Log.d("AdMob", "Interstitial ad showed fullscreen content")
+                            Log.d("AdMob", "Mediated interstitial ad showed fullscreen content")
                         }
                         override fun onAdClicked() {
-                            Log.d("AdMob", "Interstitial ad was clicked")
+                            Log.d("AdMob", "Mediated interstitial ad was clicked")
                         }
                         override fun onAdImpression() {
-                            Log.d("AdMob", "Interstitial ad impression recorded")
+                            Log.d("AdMob", "Mediated interstitial ad impression recorded")
                         }
                     }
                     showInterstitialAd(context as Activity, ad)
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
-                    Log.e("AdMob", "Interstitial ad failed to load. Error: ${error.message}")
+                    Log.e("AdMob", "Mediated interstitial ad failed to load. Error: ${error.message}")
                     Log.e("AdMob", "Error code: ${error.code}")
                     Log.e("AdMob", "Error domain: ${error.domain}")
                     when (error.code) {

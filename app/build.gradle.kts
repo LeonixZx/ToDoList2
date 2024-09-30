@@ -70,9 +70,14 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-livedata:1.5.4")
     implementation("androidx.compose.runtime:runtime-rxjava2:1.5.4")
     implementation("com.google.code.gson:gson:2.10.1")
-    implementation("com.google.android.gms:play-services-ads:23.3.0")
+    //implementation("com.google.android.gms:play-services-ads:23.3.0")
     implementation("androidx.multidex:multidex:2.0.1")
     implementation("com.google.code.gson:gson:2.8.9")
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
     implementation("androidx.compose.material3:material3:1.1.0")
+    // Update Google Mobile Ads SDK
+    implementation("com.google.android.gms:play-services-ads:22.5.0")
+
+    // Add Ad Mediation adapters (example for AdMob and Facebook Audience Network)
+    implementation("com.google.ads.mediation:facebook:6.14.0.0")
 }

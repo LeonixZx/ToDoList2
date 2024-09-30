@@ -24,6 +24,7 @@
             android:value="ca-app-pub-2107817689571311~8566453056"/>
         <!-- android:value="ca-app-pub-3940256099942544~3347511713"/>-->
 
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
