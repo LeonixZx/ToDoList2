@@ -78,6 +78,13 @@ import android.util.Log
 import android.os.Handler
 import android.os.Looper
 
+import android.app.Activity
+import androidx.compose.ui.platform.LocalContext
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.AdListener
+
 
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
@@ -102,81 +109,87 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Set up test devices
+        val testDeviceIds = listOf("YOUR_TEST_DEVICE_ID") // Replace with your test device ID
+        val configuration = RequestConfiguration.Builder().setTestDeviceIds(testDeviceIds).build()
+        MobileAds.setRequestConfiguration(configuration)
+
         // Load the interstitial ad
         loadInterstitialAd()
 
         setContent {
             TodoAppTheme {
-                var showAd by remember { mutableStateOf(true) }
-
-                if (showAd) {
-                    ShowInterstitialAd(
-                        onAdClosed = {
-                            showAd = false
-                        }
-                    )
-                }
-
                 TodoApp(
                     todoViewModel = todoViewModel,
                     onExport = { exportLauncher.launch("todos.json") },
-                    onImport = { importLauncher.launch(arrayOf("application/json")) }
+                    onImport = { importLauncher.launch(arrayOf("application/json")) },
+                    onShowInterstitial = { showInterstitialAd() }
                 )
             }
         }
     }
 
-    private fun loadInterstitialAd(retryCount: Int = 0, maxRetries: Int = 3) {
+    private fun loadInterstitialAd() {
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             this,
-            "ca-app-pub-3940256099942544/1033173712", // Test ID
+            "ca-app-pub-3940256099942544/1033173712", // Test interstitial ad unit ID
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     Log.d("AdMob", "Interstitial ad loaded successfully")
                     interstitialAd = ad
+                    ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                        override fun onAdDismissedFullScreenContent() {
+                            Log.d("AdMob", "Interstitial ad was dismissed")
+                            interstitialAd = null
+                            loadInterstitialAd() // Load the next ad
+                        }
+                        override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                            Log.e("AdMob", "Interstitial ad failed to show. Error: ${adError.message}")
+                            interstitialAd = null
+                        }
+                        override fun onAdShowedFullScreenContent() {
+                            Log.d("AdMob", "Interstitial ad showed fullscreen content")
+                        }
+                    }
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
-                    Log.e("AdMob", "Interstitial ad failed to load: ${error.message}")
+                    logAdError("Interstitial", error)
                     interstitialAd = null
-                    if (retryCount < maxRetries) {
-                        Log.d("AdMob", "Retrying ad load. Attempt ${retryCount + 1}")
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            loadInterstitialAd(retryCount + 1, maxRetries)
-                        }, 5000) // Wait 5 seconds before retrying
-                    }
                 }
             }
         )
     }
 
-    @Composable
-    private fun ShowInterstitialAd(onAdClosed: () -> Unit) {
-        LaunchedEffect(Unit) {
-            if (interstitialAd != null) {
-                interstitialAd?.show(this@MainActivity)
-                interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
-                    override fun onAdDismissedFullScreenContent() {
-                        Log.d("AdMob", "Interstitial ad was dismissed")
-                        onAdClosed()
-                        loadInterstitialAd() // Load the next ad
-                    }
-                    override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                        Log.e("AdMob", "Failed to show interstitial ad: ${adError.message}")
-                        onAdClosed()
-                    }
-                    override fun onAdShowedFullScreenContent() {
-                        Log.d("AdMob", "Interstitial ad showed fullscreen content")
-                    }
-                }
-            } else {
-                Log.w("AdMob", "Interstitial ad not loaded yet")
-                onAdClosed()
-            }
+    private fun showInterstitialAd() {
+        if (interstitialAd != null) {
+            interstitialAd?.show(this)
+        } else {
+            Log.d("AdMob", "The interstitial ad wasn't ready yet.")
+        }
+    }
+
+    private fun logAdError(adType: String, error: LoadAdError) {
+        Log.e("AdMob", "$adType ad failed to load. Error details:")
+        Log.e("AdMob", "Domain: ${error.domain}")
+        Log.e("AdMob", "Code: ${error.code}")
+        Log.e("AdMob", "Message: ${error.message}")
+        Log.e("AdMob", "Cause: ${error.cause}")
+        Log.e("AdMob", "Response info: ${error.responseInfo}")
+        Log.e("AdMob", "To string: ${error}")
+
+        when (error.code) {
+            AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
+            AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
+            AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
+            AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
+            AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
+            else -> Log.e("AdMob", "Unknown error occurred")
         }
     }
 }
+
 
 
 class CustomTopShape(private val cornerRadius: Float) : Shape {
@@ -353,12 +366,27 @@ fun rememberAuroraBackground(): Brush {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> Unit) {
+fun TodoApp(
+    todoViewModel: TodoViewModel,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+    onShowInterstitial: () -> Unit
+) {
     var newTodoText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(TaskCategory.ALL) }
     var sortOrder by remember { mutableStateOf(SortOrder.DATE_DESC) }
     var showSortDialog by remember { mutableStateOf(false) }
+    var showAd by remember { mutableStateOf(true) }
+
+    // Show interstitial ad
+    if (showAd) {
+        AdMobInterstitial(
+            onAdClosed = {
+                showAd = false
+            }
+        )
+    }
 
     Scaffold { innerPadding ->
         Column(
@@ -410,19 +438,27 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            TodoList(
-                todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
-                    when (sortOrder) {
-                        SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
-                        SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
-                        SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
-                        SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
-                    }
-                },
-                onToggleTodo = { todoViewModel.toggleTodo(it) },
-                onDeleteTodo = { todoViewModel.deleteTodo(it) },
-                onEditTodo = { id, newText -> todoViewModel.editTodo(id, newText) }
-            )
+            // Wrap TodoList in a weight modifier to push the ad to the bottom
+            Box(modifier = Modifier.weight(1f)) {
+                TodoList(
+                    todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
+                        when (sortOrder) {
+                            SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
+                            SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
+                            SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
+                            SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
+                        }
+                    },
+                    onToggleTodo = { todoViewModel.toggleTodo(it) },
+                    onDeleteTodo = { todoViewModel.deleteTodo(it) },
+                    onEditTodo = { id, newText -> todoViewModel.editTodo(id, newText) }
+                )
+            }
+
+            // Add the AdMobBanner at the bottom
+            AdMobBanner(modifier = Modifier.fillMaxWidth())
+
+
         }
     }
 
@@ -548,6 +584,7 @@ fun AddTodoInput(
     }
 }
 
+
 @Composable
 fun CategoryButtons(selectedCategory: TaskCategory, onCategorySelected: (TaskCategory) -> Unit) {
     Row(
@@ -609,9 +646,6 @@ fun CategoryButton(
         }
     }
 }
-
-
-
 
 
 
@@ -810,6 +844,7 @@ fun TodoList(todos: List<Todo>, onToggleTodo: (Int) -> Unit, onDeleteTodo: (Int)
 }
 
 
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodoItem(
@@ -821,7 +856,7 @@ fun TodoItem(
     var showDeletePrompt by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
-    var editedText by remember { mutableStateOf(todo.task) }
+    var editedText by remember(todo.id) { mutableStateOf(todo.task) }
 
     Card(
         modifier = Modifier
@@ -836,24 +871,29 @@ fun TodoItem(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = if (todo.isCompleted) Color.LightGray.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            IconButton(
-                onClick = { isEditing = !isEditing },
-                modifier = Modifier.size(24.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit task",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
+                IconButton(
+                    onClick = {
+                        isEditing = !isEditing
+                        if (isEditing) editedText = todo.task
+                    },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isEditing) Icons.Default.Check else Icons.Default.Edit,
+                        contentDescription = if (isEditing) "Save" else "Edit task",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
                 if (isEditing) {
                     BasicTextField(
                         value = editedText,
@@ -861,7 +901,9 @@ fun TodoItem(
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = if (todo.isCompleted) Color.Gray else Color.Black
                         ),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 4.dp)
                     )
                 } else {
                     Text(
@@ -872,58 +914,60 @@ fun TodoItem(
                         ),
                         maxLines = if (expanded) Int.MAX_VALUE else 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.alpha(if (todo.isCompleted) 0.7f else 1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .alpha(if (todo.isCompleted) 0.7f else 1f)
                     )
                 }
-                if (expanded || todo.task.length <= 100) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = "Date",
-                            modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                Spacer(modifier = Modifier.width(8.dp))
+                TaskStatusToggle(
+                    isCompleted = todo.isCompleted,
+                    onToggle = { onToggle(todo.id) }
+                )
+            }
+
+            if (expanded || todo.task.length <= 100) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = "Date",
+                        modifier = Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 10.sp,
+                            color = if (todo.isCompleted) Color.Gray.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 10.sp,
-                                color = if (todo.isCompleted) Color.Gray.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        )
-                    }
+                    )
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            TaskStatusToggle(
-                isCompleted = todo.isCompleted,
-                onToggle = { onToggle(todo.id) }
-            )
-        }
 
-        if (isEditing) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = {
-                    isEditing = false
-                    editedText = todo.task  // Reset to original text
-                }) {
-                    Text("Cancel")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        onEdit(todo.id, editedText)
-                        isEditing = false
-                    },
-                    enabled = editedText.isNotBlank() && editedText != todo.task
+            if (isEditing) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
                 ) {
-                    Text("Save")
+                    TextButton(onClick = {
+                        isEditing = false
+                        editedText = todo.task  // Reset to original text
+                    }) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            onEdit(todo.id, editedText)
+                            isEditing = false
+                        },
+                        enabled = editedText.isNotBlank() && editedText != todo.task
+                    ) {
+                        Text("Save")
+                    }
                 }
             }
         }
@@ -971,16 +1015,121 @@ fun TaskStatusChip(completed: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-fun BannerAd() {
+fun AdMobBanner(modifier: Modifier = Modifier) {
     AndroidView(
+        modifier = modifier,
         factory = { context ->
             AdView(context).apply {
                 setAdSize(AdSize.BANNER)
-                adUnitId = "ca-app-pub-2107817689571311/9015709889" // Replace with your ad unit ID
+                adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test banner ad unit ID
                 loadAd(AdRequest.Builder().build())
+                adListener = object : AdListener() {
+                    override fun onAdLoaded() {
+                        Log.d("AdMob", "Banner ad loaded successfully")
+                    }
+                    override fun onAdFailedToLoad(error: LoadAdError) {
+                        logAdError("Banner", error)
+                    }
+                    override fun onAdOpened() {
+                        Log.d("AdMob", "Banner ad opened")
+                    }
+                    override fun onAdClicked() {
+                        Log.d("AdMob", "Banner ad clicked")
+                    }
+                    override fun onAdClosed() {
+                        Log.d("AdMob", "Banner ad closed")
+                    }
+                    override fun onAdImpression() {
+                        Log.d("AdMob", "Banner ad impression recorded")
+                    }
+                }
             }
         }
     )
+}
+
+fun logAdError(adType: String, error: LoadAdError) {
+    Log.e("AdMob", "$adType ad failed to load. Error details:")
+    Log.e("AdMob", "Domain: ${error.domain}")
+    Log.e("AdMob", "Code: ${error.code}")
+    Log.e("AdMob", "Message: ${error.message}")
+    Log.e("AdMob", "Cause: ${error.cause}")
+    Log.e("AdMob", "Response info: ${error.responseInfo}")
+    Log.e("AdMob", "To string: ${error}")
+
+    when (error.code) {
+        AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
+        AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
+        AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
+        AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
+        AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
+        else -> Log.e("AdMob", "Unknown error occurred")
+    }
+}
+
+@Composable
+fun AdMobInterstitial(onAdClosed: () -> Unit) {
+    val context = LocalContext.current
+    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+
+    LaunchedEffect(Unit) {
+        InterstitialAd.load(
+            context,
+            "ca-app-pub-3940256099942544/1033173712", // Test ad unit ID
+            AdRequest.Builder().build(),
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    Log.d("AdMob", "Interstitial ad loaded successfully")
+                    interstitialAd = ad
+                    ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                        override fun onAdDismissedFullScreenContent() {
+                            Log.d("AdMob", "Interstitial ad was dismissed")
+                            interstitialAd = null
+                            onAdClosed()
+                        }
+                        override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                            Log.e("AdMob", "Interstitial ad failed to show. Error: ${adError.message}")
+                            interstitialAd = null
+                            onAdClosed()
+                        }
+                        override fun onAdShowedFullScreenContent() {
+                            Log.d("AdMob", "Interstitial ad showed fullscreen content")
+                        }
+                        override fun onAdClicked() {
+                            Log.d("AdMob", "Interstitial ad was clicked")
+                        }
+                        override fun onAdImpression() {
+                            Log.d("AdMob", "Interstitial ad impression recorded")
+                        }
+                    }
+                    showInterstitialAd(context as Activity, ad)
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    Log.e("AdMob", "Interstitial ad failed to load. Error: ${error.message}")
+                    Log.e("AdMob", "Error code: ${error.code}")
+                    Log.e("AdMob", "Error domain: ${error.domain}")
+                    when (error.code) {
+                        AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
+                        AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
+                        AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
+                        AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
+                        AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
+                        else -> Log.e("AdMob", "Unknown error occurred")
+                    }
+                    interstitialAd = null
+                    onAdClosed()
+                }
+            }
+        )
+    }
+}
+
+private fun showInterstitialAd(activity: Activity, ad: InterstitialAd?) {
+    if (ad != null) {
+        ad.show(activity)
+    } else {
+        Log.w("AdMob", "Interstitial ad was not ready yet.")
+    }
 }
 
 enum class TaskCategory {
