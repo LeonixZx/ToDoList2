@@ -1021,7 +1021,7 @@ fun AdMobBanner(modifier: Modifier = Modifier) {
         factory = { context ->
             AdView(context).apply {
                 setAdSize(AdSize.BANNER)
-                adUnitId = "ca-app-pub-2107817689571311/2329181913" // Test ad unit ID
+                adUnitId = "ca-app-pub-3940256099942544/630097811112" // Test ad unit ID
                 loadAd(AdRequest.Builder().build())
                 adListener = object : AdListener() {
                     override fun onAdLoaded() {
@@ -1066,7 +1066,7 @@ fun AdMobInterstitial(onAdClosed: () -> Unit) {
     LaunchedEffect(Unit) {
         InterstitialAd.load(
             context,
-            "ca-app-pub-2107817689571311/7365052025", // Test ad unit ID
+            "ca-app-pub-3940256099942544/1033173712", // Test ad unit ID
             AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
