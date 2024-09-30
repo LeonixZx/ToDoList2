@@ -85,7 +85,6 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.AdListener
 
-
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
     private var interstitialAd: InterstitialAd? = null
@@ -109,31 +108,35 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Set up test devices
-        val testDeviceIds = listOf("YOUR_TEST_DEVICE_ID") // Replace with your test device ID
-        val configuration = RequestConfiguration.Builder().setTestDeviceIds(testDeviceIds).build()
-        MobileAds.setRequestConfiguration(configuration)
-
         // Load the interstitial ad
         loadInterstitialAd()
 
         setContent {
             TodoAppTheme {
+                var showAd by remember { mutableStateOf(true) }
+
+                if (showAd) {
+                    ShowInterstitialAd(
+                        onAdClosed = {
+                            showAd = false
+                        }
+                    )
+                }
+
                 TodoApp(
                     todoViewModel = todoViewModel,
                     onExport = { exportLauncher.launch("todos.json") },
-                    onImport = { importLauncher.launch(arrayOf("application/json")) },
-                    onShowInterstitial = { showInterstitialAd() }
+                    onImport = { importLauncher.launch(arrayOf("application/json")) }
                 )
             }
         }
     }
 
-    private fun loadInterstitialAd() {
+    private fun loadInterstitialAd(retryCount: Int = 0, maxRetries: Int = 3) {
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             this,
-            "ca-app-pub-3940256099942544/1033173712", // Test interstitial ad unit ID
+            "ca-app-pub-3940256099942544/1033173712", // Test ID
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
@@ -155,41 +158,41 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 override fun onAdFailedToLoad(error: LoadAdError) {
-                    logAdError("Interstitial", error)
+                    Log.e("AdMob", "Interstitial ad failed to load. Error: ${error.message}")
+                    Log.e("AdMob", "Error code: ${error.code}")
+                    Log.e("AdMob", "Error domain: ${error.domain}")
+                    when (error.code) {
+                        AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
+                        AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
+                        AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
+                        AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
+                        AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
+                        else -> Log.e("AdMob", "Unknown error occurred")
+                    }
                     interstitialAd = null
+                    if (retryCount < maxRetries) {
+                        Log.d("AdMob", "Retrying ad load. Attempt ${retryCount + 1}")
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            loadInterstitialAd(retryCount + 1, maxRetries)
+                        }, 5000) // Wait 5 seconds before retrying
+                    }
                 }
             }
         )
     }
 
-    private fun showInterstitialAd() {
-        if (interstitialAd != null) {
-            interstitialAd?.show(this)
-        } else {
-            Log.d("AdMob", "The interstitial ad wasn't ready yet.")
-        }
-    }
-
-    private fun logAdError(adType: String, error: LoadAdError) {
-        Log.e("AdMob", "$adType ad failed to load. Error details:")
-        Log.e("AdMob", "Domain: ${error.domain}")
-        Log.e("AdMob", "Code: ${error.code}")
-        Log.e("AdMob", "Message: ${error.message}")
-        Log.e("AdMob", "Cause: ${error.cause}")
-        Log.e("AdMob", "Response info: ${error.responseInfo}")
-        Log.e("AdMob", "To string: ${error}")
-
-        when (error.code) {
-            AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
-            AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
-            AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
-            AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
-            AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
-            else -> Log.e("AdMob", "Unknown error occurred")
+    @Composable
+    private fun ShowInterstitialAd(onAdClosed: () -> Unit) {
+        LaunchedEffect(Unit) {
+            if (interstitialAd != null) {
+                interstitialAd?.show(this@MainActivity)
+            } else {
+                Log.w("AdMob", "Interstitial ad not loaded yet")
+                onAdClosed()
+            }
         }
     }
 }
-
 
 
 class CustomTopShape(private val cornerRadius: Float) : Shape {
@@ -366,12 +369,7 @@ fun rememberAuroraBackground(): Brush {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TodoApp(
-    todoViewModel: TodoViewModel,
-    onExport: () -> Unit,
-    onImport: () -> Unit,
-    onShowInterstitial: () -> Unit
-) {
+fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> Unit) {
     var newTodoText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(TaskCategory.ALL) }
@@ -456,9 +454,11 @@ fun TodoApp(
             }
 
             // Add the AdMobBanner at the bottom
-            AdMobBanner(modifier = Modifier.fillMaxWidth())
-
-
+            AdMobBanner(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            )
         }
     }
 
@@ -1021,14 +1021,24 @@ fun AdMobBanner(modifier: Modifier = Modifier) {
         factory = { context ->
             AdView(context).apply {
                 setAdSize(AdSize.BANNER)
-                adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test banner ad unit ID
+                adUnitId = "ca-app-pub-2107817689571311/2329181913" // Test ad unit ID
                 loadAd(AdRequest.Builder().build())
                 adListener = object : AdListener() {
                     override fun onAdLoaded() {
                         Log.d("AdMob", "Banner ad loaded successfully")
                     }
                     override fun onAdFailedToLoad(error: LoadAdError) {
-                        logAdError("Banner", error)
+                        Log.e("AdMob", "Banner ad failed to load. Error: ${error.message}")
+                        Log.e("AdMob", "Error code: ${error.code}")
+                        Log.e("AdMob", "Error domain: ${error.domain}")
+                        when (error.code) {
+                            AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
+                            AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
+                            AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
+                            AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
+                            AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
+                            else -> Log.e("AdMob", "Unknown error occurred")
+                        }
                     }
                     override fun onAdOpened() {
                         Log.d("AdMob", "Banner ad opened")
@@ -1048,25 +1058,6 @@ fun AdMobBanner(modifier: Modifier = Modifier) {
     )
 }
 
-fun logAdError(adType: String, error: LoadAdError) {
-    Log.e("AdMob", "$adType ad failed to load. Error details:")
-    Log.e("AdMob", "Domain: ${error.domain}")
-    Log.e("AdMob", "Code: ${error.code}")
-    Log.e("AdMob", "Message: ${error.message}")
-    Log.e("AdMob", "Cause: ${error.cause}")
-    Log.e("AdMob", "Response info: ${error.responseInfo}")
-    Log.e("AdMob", "To string: ${error}")
-
-    when (error.code) {
-        AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
-        AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
-        AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
-        AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
-        AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
-        else -> Log.e("AdMob", "Unknown error occurred")
-    }
-}
-
 @Composable
 fun AdMobInterstitial(onAdClosed: () -> Unit) {
     val context = LocalContext.current
@@ -1075,7 +1066,7 @@ fun AdMobInterstitial(onAdClosed: () -> Unit) {
     LaunchedEffect(Unit) {
         InterstitialAd.load(
             context,
-            "ca-app-pub-3940256099942544/1033173712", // Test ad unit ID
+            "ca-app-pub-2107817689571311/7365052025", // Test ad unit ID
             AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
@@ -1135,6 +1126,3 @@ private fun showInterstitialAd(activity: Activity, ad: InterstitialAd?) {
 enum class TaskCategory {
     TODO, DONE, ALL
 }
-
-
-
