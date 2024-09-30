@@ -66,8 +66,22 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.zIndex
 
+import com.google.android.gms.ads.*
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+
+import android.util.Log
+import android.os.Handler
+import android.os.Looper
+
+
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
+    private var interstitialAd: InterstitialAd? = null
 
     private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri?.let { todoViewModel.exportTasks(contentResolver, it) }
@@ -79,13 +93,86 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize AdMob
+        MobileAds.initialize(this) { initializationStatus ->
+            val statusMap = initializationStatus.adapterStatusMap
+            for ((adapterClass, status) in statusMap) {
+                Log.d("AdMob", "Adapter name: $adapterClass, Description: ${status.description}, Latency: ${status.latency}")
+            }
+        }
+
+        // Load the interstitial ad
+        loadInterstitialAd()
+
         setContent {
             TodoAppTheme {
+                var showAd by remember { mutableStateOf(true) }
+
+                if (showAd) {
+                    ShowInterstitialAd(
+                        onAdClosed = {
+                            showAd = false
+                        }
+                    )
+                }
+
                 TodoApp(
-                    todoViewModel,
+                    todoViewModel = todoViewModel,
                     onExport = { exportLauncher.launch("todos.json") },
                     onImport = { importLauncher.launch(arrayOf("application/json")) }
                 )
+            }
+        }
+    }
+
+    private fun loadInterstitialAd(retryCount: Int = 0, maxRetries: Int = 3) {
+        val adRequest = AdRequest.Builder().build()
+        InterstitialAd.load(
+            this,
+            "ca-app-pub-3940256099942544/1033173712", // Test ID
+            adRequest,
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    Log.d("AdMob", "Interstitial ad loaded successfully")
+                    interstitialAd = ad
+                }
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    Log.e("AdMob", "Interstitial ad failed to load: ${error.message}")
+                    interstitialAd = null
+                    if (retryCount < maxRetries) {
+                        Log.d("AdMob", "Retrying ad load. Attempt ${retryCount + 1}")
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            loadInterstitialAd(retryCount + 1, maxRetries)
+                        }, 5000) // Wait 5 seconds before retrying
+                    }
+                }
+            }
+        )
+    }
+
+    @Composable
+    private fun ShowInterstitialAd(onAdClosed: () -> Unit) {
+        LaunchedEffect(Unit) {
+            if (interstitialAd != null) {
+                interstitialAd?.show(this@MainActivity)
+                interstitialAd?.fullScreenContentCallback = object : FullScreenContentCallback() {
+                    override fun onAdDismissedFullScreenContent() {
+                        Log.d("AdMob", "Interstitial ad was dismissed")
+                        onAdClosed()
+                        loadInterstitialAd() // Load the next ad
+                    }
+                    override fun onAdFailedToShowFullScreenContent(adError: AdError) {
+                        Log.e("AdMob", "Failed to show interstitial ad: ${adError.message}")
+                        onAdClosed()
+                    }
+                    override fun onAdShowedFullScreenContent() {
+                        Log.d("AdMob", "Interstitial ad showed fullscreen content")
+                    }
+                }
+            } else {
+                Log.w("AdMob", "Interstitial ad not loaded yet")
+                onAdClosed()
             }
         }
     }
@@ -534,7 +621,7 @@ fun TaskStatusToggle(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val switchWidth = 52.dp
+    val switchWidth = 62.dp
     val switchHeight = 26.dp
     val toggleSize = 22.dp
 
@@ -881,6 +968,19 @@ fun TaskStatusChip(completed: Boolean, onClick: () -> Unit) {
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
+}
+
+@Composable
+fun BannerAd() {
+    AndroidView(
+        factory = { context ->
+            AdView(context).apply {
+                setAdSize(AdSize.BANNER)
+                adUnitId = "ca-app-pub-2107817689571311/9015709889" // Replace with your ad unit ID
+                loadAd(AdRequest.Builder().build())
+            }
+        }
+    )
 }
 
 enum class TaskCategory {
