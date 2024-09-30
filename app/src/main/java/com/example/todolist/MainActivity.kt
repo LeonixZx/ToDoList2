@@ -34,6 +34,12 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -47,12 +53,18 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Upload
-
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Edit
-
 import androidx.compose.runtime.Composable
-
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.zIndex
 
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
@@ -78,6 +90,90 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+
+class CustomTopShape(private val cornerRadius: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        return Outline.Generic(
+            path = Path().apply {
+                reset()
+                lineTo(size.width, 0f)
+                lineTo(size.width, size.height - cornerRadius)
+                quadraticBezierTo(size.width, size.height, size.width - cornerRadius, size.height)
+                lineTo(cornerRadius, size.height)
+                quadraticBezierTo(0f, size.height, 0f, size.height - cornerRadius)
+                close()
+            }
+        )
+    }
+}
+
+@Composable
+fun TopSection(
+    todoViewModel: TodoViewModel,
+    selectedCategory: TaskCategory,
+    onCategorySelected: (TaskCategory) -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit
+) {
+    val today = remember { SimpleDateFormat("d MMMM", Locale.getDefault()).format(Date()) }
+    val itemCount = todoViewModel.todos.size
+
+    val colors = listOf(
+        Color(0xFF9C27B0),
+        Color(0xFF3F51B5),
+        Color(0xFF2196F3),
+        Color(0xFF00BCD4)
+    )
+
+    val brush = Brush.linearGradient(colors = colors)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .shadow(elevation = 8.dp, shape = RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            .background(brush = brush)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Tasks", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                Row {
+                    IconButton(onClick = onExport) {
+                        Icon(Icons.Filled.Upload, contentDescription = "Export", tint = Color.White)
+                    }
+                    IconButton(onClick = onImport) {
+                        Icon(Icons.Filled.Download, contentDescription = "Import", tint = Color.White)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Today: $today",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White
+            )
+            Text(
+                text = "$itemCount items",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            CategoryButtons(selectedCategory, onCategorySelected)
+        }
+    }
+}
+
+
 
 @Composable
 fun GradientButton(
@@ -177,105 +273,69 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
     var sortOrder by remember { mutableStateOf(SortOrder.DATE_DESC) }
     var showSortDialog by remember { mutableStateOf(false) }
 
-    val gradient = Brush.verticalGradient(
-        colors = listOf(
-            AppColors.LightPurple,
-            MaterialTheme.colorScheme.background
-        )
-    )
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text("Tasks", style = MaterialTheme.typography.titleMedium)
-                        CategoryButtons(selectedCategory) { selectedCategory = it }
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onExport) {
-                        Icon(Icons.Filled.Upload, contentDescription = "Export", modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(onClick = onImport) {
-                        Icon(Icons.Filled.Download, contentDescription = "Import", modifier = Modifier.size(20.dp))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = AppColors.LightPurple
-                ),
-                modifier = Modifier.height(48.dp)
-            )
-        }
-    ) { innerPadding ->
-        Box(
+    Scaffold { innerPadding ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(brush = gradient)
+                .padding(innerPadding)
         ) {
-            Column(
+            TopSection(
+                todoViewModel = todoViewModel,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { selectedCategory = it },
+                onExport = onExport,
+                onImport = onImport
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SearchBar(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = { showSortDialog = true },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(Icons.Filled.Sort, contentDescription = "Sort")
-                    }
-                }
-                AddTodoInput(
-                    value = newTodoText,
-                    onValueChange = { newTodoText = it },
-                    onAddClick = {
-                        if (newTodoText.isNotBlank()) {
-                            todoViewModel.addTodo(newTodoText)
-                            newTodoText = ""
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    modifier = Modifier.weight(1f)
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    onClick = { showSortDialog = true },
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    Greeting()
-                    TaskCount(todoViewModel.todos.size)
+                    Icon(Icons.Filled.Sort, contentDescription = "Sort")
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                TodoList(
-                    todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
-                        when (sortOrder) {
-                            SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
-                            SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
-                            SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
-                            SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
-                        }
-                    },
-                    onToggleTodo = { todoViewModel.toggleTodo(it) },
-                    onDeleteTodo = { todoViewModel.deleteTodo(it) },
-                    onEditTodo = { id, newText -> todoViewModel.editTodo(id, newText) }
-                )
             }
+
+            AddTodoInput(
+                value = newTodoText,
+                onValueChange = { newTodoText = it },
+                onAddClick = {
+                    if (newTodoText.isNotBlank()) {
+                        todoViewModel.addTodo(newTodoText)
+                        newTodoText = ""
+                    }
+                },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            TodoList(
+                todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
+                    when (sortOrder) {
+                        SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
+                        SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
+                        SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
+                        SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
+                    }
+                },
+                onToggleTodo = { todoViewModel.toggleTodo(it) },
+                onDeleteTodo = { todoViewModel.deleteTodo(it) },
+                onEditTodo = { id, newText -> todoViewModel.editTodo(id, newText) }
+            )
         }
     }
 
@@ -404,29 +464,29 @@ fun AddTodoInput(
 @Composable
 fun CategoryButtons(selectedCategory: TaskCategory, onCategorySelected: (TaskCategory) -> Unit) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
         CategoryButton(
             text = "To-Do",
             icon = Icons.Default.CheckCircleOutline,
-            category = TaskCategory.TODO,
-            selectedCategory = selectedCategory,
-            onCategorySelected = onCategorySelected
+            selected = selectedCategory == TaskCategory.TODO,
+            onClick = { onCategorySelected(TaskCategory.TODO) },
+            modifier = Modifier.weight(1f)
         )
         CategoryButton(
             text = "Done",
             icon = Icons.Default.CheckCircle,
-            category = TaskCategory.DONE,
-            selectedCategory = selectedCategory,
-            onCategorySelected = onCategorySelected
+            selected = selectedCategory == TaskCategory.DONE,
+            onClick = { onCategorySelected(TaskCategory.DONE) },
+            modifier = Modifier.weight(1f)
         )
         CategoryButton(
             text = "All",
             icon = Icons.Default.List,
-            category = TaskCategory.ALL,
-            selectedCategory = selectedCategory,
-            onCategorySelected = onCategorySelected
+            selected = selectedCategory == TaskCategory.ALL,
+            onClick = { onCategorySelected(TaskCategory.ALL) },
+            modifier = Modifier.weight(1f)
         )
     }
 }
@@ -435,26 +495,140 @@ fun CategoryButtons(selectedCategory: TaskCategory, onCategorySelected: (TaskCat
 fun CategoryButton(
     text: String,
     icon: ImageVector,
-    category: TaskCategory,
-    selectedCategory: TaskCategory,
-    onCategorySelected: (TaskCategory) -> Unit
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    TextButton(
-        onClick = { onCategorySelected(category) },
-        colors = ButtonDefaults.textButtonColors(
-            contentColor = if (category == selectedCategory)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) Color.White else Color.White.copy(alpha = 0.2f),
+            contentColor = if (selected) Color(0xFF3F51B5) else Color.White
         ),
-        shape = RoundedCornerShape(16.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.height(36.dp)
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp))
-        Spacer(modifier = Modifier.width(2.dp))
-        Text(text, style = MaterialTheme.typography.labelSmall)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text, style = MaterialTheme.typography.labelMedium)
+        }
     }
 }
+
+
+
+
+
+
+@Composable
+fun TaskStatusToggle(
+    isCompleted: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val switchWidth = 52.dp
+    val switchHeight = 26.dp
+    val toggleSize = 22.dp
+
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val animatedOffset by animateDpAsState(
+        targetValue = if (isCompleted) (switchWidth - toggleSize - 2.dp) else 2.dp,
+        animationSpec = tween(durationMillis = 300)
+    )
+
+    Box(
+        modifier = modifier
+            .width(switchWidth)
+            .height(switchHeight)
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(switchHeight / 2))
+            .clip(RoundedCornerShape(switchHeight / 2))
+            .background(if (isCompleted) Color(0xFF4CAF50) else Color(0xFFFF5252))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                onToggle()
+            }
+    ) {
+        // Text
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp)
+        ) {
+            Text(
+                text = if (isCompleted) "Done" else "Todo",
+                color = Color.White,
+                fontWeight = FontWeight.Normal,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .align(if (isCompleted) Alignment.CenterStart else Alignment.CenterEnd)
+                    .zIndex(2f)
+            )
+        }
+
+        // Toggle
+        Box(
+            modifier = Modifier
+                .size(toggleSize)
+                .offset(x = animatedOffset)
+                .align(Alignment.CenterStart)
+                .shadow(elevation = 2.dp, shape = CircleShape)
+                .clip(CircleShape)
+                .background(Color.White)
+                .zIndex(3f)
+        )
+    }
+}
+
+
+
+
+@Composable
+fun AnimatedGradientBackground(content: @Composable () -> Unit) {
+    val colors = listOf(
+        Color(0xFF9C27B0),
+        Color(0xFF3F51B5),
+        Color(0xFF2196F3),
+        Color(0xFF00BCD4),
+        Color(0xFF4CAF50)
+    )
+
+    val infiniteTransition = rememberInfiniteTransition()
+    val offset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(10000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    val brush = Brush.linearGradient(
+        colors = colors,
+        start = Offset(offset * 1000f, 0f),
+        end = Offset((offset + 1) * 1000f, 1000f)
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(brush = brush)
+    ) {
+        content()
+    }
+}
+
+
 
 @Composable
 fun SearchBar(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
@@ -575,104 +749,94 @@ fun TodoItem(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = if (todo.isCompleted) Color.LightGray.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            IconButton(
+                onClick = { isEditing = !isEditing },
+                modifier = Modifier.size(24.dp)
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = { isEditing = !isEditing },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit task",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    if (isEditing) {
-                        BasicTextField(
-                            value = editedText,
-                            onValueChange = { editedText = it },
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (todo.isCompleted) Color.Gray else Color.Black
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(vertical = 4.dp)
-                        )
-                    } else {
-                        Text(
-                            text = todo.task,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (todo.isCompleted) Color.Gray else Color.Black,
-                                textDecoration = if (todo.isCompleted) TextDecoration.LineThrough else TextDecoration.None
-                            ),
-                            maxLines = if (expanded) Int.MAX_VALUE else 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.alpha(if (todo.isCompleted) 0.7f else 1f)
-                        )
-                    }
-                }
-                TaskStatusChip(completed = todo.isCompleted, onClick = { onToggle(todo.id) })
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit task",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
-            AnimatedVisibility(visible = expanded || todo.task.length <= 100) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = "Date",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                if (isEditing) {
+                    BasicTextField(
+                        value = editedText,
+                        onValueChange = { editedText = it },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = if (todo.isCompleted) Color.Gray else Color.Black
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                } else {
                     Text(
-                        text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                            color = if (todo.isCompleted) Color.Gray.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+                        text = todo.task,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = if (todo.isCompleted) Color.Gray else Color.Black,
+                            textDecoration = if (todo.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+                        ),
+                        maxLines = if (expanded) Int.MAX_VALUE else 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.alpha(if (todo.isCompleted) 0.7f else 1f)
                     )
                 }
-            }
-            if (isEditing) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = {
-                        isEditing = false
-                        editedText = todo.task  // Reset to original text
-                    }) {
-                        Text("Cancel")
+                if (expanded || todo.task.length <= 100) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = "Date",
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(Date(todo.createdAt)),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 10.sp,
+                                color = if (todo.isCompleted) Color.Gray.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    GradientButton(
-                        text = "Save",
-                        onClick = {
-                            onEdit(todo.id, editedText)
-                            isEditing = false
-                        },
-                        enabled = editedText.isNotBlank() && editedText != todo.task
-                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            TaskStatusToggle(
+                isCompleted = todo.isCompleted,
+                onToggle = { onToggle(todo.id) }
+            )
+        }
+
+        if (isEditing) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(onClick = {
+                    isEditing = false
+                    editedText = todo.task  // Reset to original text
+                }) {
+                    Text("Cancel")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        onEdit(todo.id, editedText)
+                        isEditing = false
+                    },
+                    enabled = editedText.isNotBlank() && editedText != todo.task
+                ) {
+                    Text("Save")
                 }
             }
         }
@@ -699,6 +863,7 @@ fun TodoItem(
         )
     }
 }
+
 
 @Composable
 fun TaskStatusChip(completed: Boolean, onClick: () -> Unit) {
