@@ -80,6 +80,37 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun GradientButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val gradient = Brush.horizontalGradient(
+        colors = listOf(Color(0xFF1E88E5), Color(0xFF42A5F5))
+    )
+
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(gradient)
+            .then(Modifier.height(48.dp)),
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = Color.White.copy(alpha = 0.3f)
+        ),
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
+        Text(text)
+    }
+}
+
+
+@Composable
 fun TodoAppTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = lightColorScheme(
@@ -634,12 +665,14 @@ fun TodoItem(
                         Text("Cancel")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Button(onClick = {
-                        onEdit(todo.id, editedText)
-                        isEditing = false
-                    }) {
-                        Text("Save")
-                    }
+                    GradientButton(
+                        text = "Save",
+                        onClick = {
+                            onEdit(todo.id, editedText)
+                            isEditing = false
+                        },
+                        enabled = editedText.isNotBlank() && editedText != todo.task
+                    )
                 }
             }
         }
