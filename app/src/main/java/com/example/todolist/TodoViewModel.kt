@@ -85,6 +85,14 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun editTodo(id: Int, newText: String) {
+        val index = _todos.indexOfFirst { it.id == id }
+        if (index != -1) {
+            _todos[index] = _todos[index].copy(task = newText)
+        }
+    }
+
+
     fun getTodos(query: String, category: TaskCategory): List<Todo> {
         return _todos.filter { todo ->
             (todo.task.contains(query, ignoreCase = true)) &&
