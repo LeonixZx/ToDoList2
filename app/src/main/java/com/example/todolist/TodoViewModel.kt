@@ -11,6 +11,12 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
+
+
+
 
 class TodoViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = TodoRepository(application)
@@ -32,10 +38,17 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addTodo(task: String) {
-        viewModelScope.launch {
-            val newTodo = Todo(id = (_todos.maxOfOrNull { it.id } ?: 0) + 1, task = task)
-            _todos.add(newTodo)
+    fun addTodo(task: String, attachments: List<Uri>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val savedAttachments = saveAttachments(attachments)
+            val newTodo = Todo(
+                id = (_todos.maxOfOrNull { it.id } ?: 0) + 1,
+                task = task,
+                attachments = savedAttachments
+            )
+            withContext(Dispatchers.Main) {
+                _todos.add(newTodo)
+            }
             saveTasks()
         }
     }
@@ -51,10 +64,18 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteTodo(id: Int) {
-        viewModelScope.launch {
-            _todos.removeAll { it.id == id }
+        viewModelScope.launch(Dispatchers.IO) {
+            val todoToDelete = _todos.find { it.id == id }
+            todoToDelete?.attachments?.forEach { deleteAttachment(it) }
+            withContext(Dispatchers.Main) {
+                _todos.removeAll { it.id == id }
+            }
             saveTasks()
         }
+    }
+
+    private fun deleteAttachment(filePath: String) {
+        File(filePath).delete()
     }
 
     private fun saveTasks() {
@@ -85,13 +106,35 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun editTodo(id: Int, newText: String) {
-        val index = _todos.indexOfFirst { it.id == id }
-        if (index != -1) {
-            _todos[index] = _todos[index].copy(task = newText)
+    fun editTodo(id: Int, newText: String, newAttachments: List<Uri>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val index = _todos.indexOfFirst { it.id == id }
+            if (index != -1) {
+                val oldAttachments = _todos[index].attachments
+                val savedNewAttachments = saveAttachments(newAttachments)
+                withContext(Dispatchers.Main) {
+                    _todos[index] = _todos[index].copy(
+                        task = newText,
+                        attachments = oldAttachments + savedNewAttachments
+                    )
+                }
+                saveTasks()
+            }
         }
     }
 
+    private fun saveAttachments(attachments: List<Uri>): List<String> {
+        return attachments.mapNotNull { uri ->
+            val inputStream = getApplication<Application>().contentResolver.openInputStream(uri)
+            val file = File(getApplication<Application>().filesDir, "attachment_${UUID.randomUUID()}")
+            inputStream?.use { input ->
+                FileOutputStream(file).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            file.absolutePath
+        }
+    }
 
     fun getTodos(query: String, category: TaskCategory): List<Todo> {
         return _todos.filter { todo ->

@@ -116,11 +116,16 @@ import coil.compose.rememberAsyncImagePainter
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
-
 import androidx.compose.ui.layout.ContentScale
-
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     private companion object {
@@ -589,166 +594,70 @@ fun rememberAuroraBackground(): Brush {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> Unit) {
-    var newTodoText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(TaskCategory.ALL) }
+    var newTodoText by remember { mutableStateOf("") }
+    var selectedAttachments by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var sortOrder by remember { mutableStateOf(SortOrder.DATE_DESC) }
-    var showSortDialog by remember { mutableStateOf(false) }
-    var showAd by remember { mutableStateOf(true) }
 
-    // Add these lines for the draggable gauge
-    var offsetX by remember { mutableStateOf(0f) }
-    var offsetY by remember { mutableStateOf(0f) }
-
-    // Calculate the progress
-    val totalTasks = todoViewModel.todos.size
-    val completedTasks = todoViewModel.todos.count { it.isCompleted }
-    val progress = if (totalTasks > 0) completedTasks.toFloat() / totalTasks else 0f
-
-    // Show interstitial ad
-    if (showAd) {
-        AdMobInterstitial(
-            onAdClosed = {
-                showAd = false
-            }
-        )
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        selectedAttachments = uris
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                TopSection(
-                    todoViewModel = todoViewModel,
-                    selectedCategory = selectedCategory,
-                    onCategorySelected = { selectedCategory = it },
-                    onExport = onExport,
-                    onImport = onImport
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SearchBar(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = { showSortDialog = true },
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Icon(Icons.Filled.Sort, contentDescription = "Sort")
+    Column(modifier = Modifier.fillMaxSize()) {
+        TopSection(
+            todoViewModel = todoViewModel,
+            selectedCategory = selectedCategory,
+            onCategorySelected = { selectedCategory = it },
+            onExport = onExport,
+            onImport = onImport
+        )
+        SearchBar(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AddTodoInput(
+                value = newTodoText,
+                onValueChange = { newTodoText = it },
+                onAddClick = {
+                    if (newTodoText.isNotBlank()) {
+                        todoViewModel.addTodo(newTodoText, selectedAttachments)
+                        newTodoText = ""
+                        selectedAttachments = emptyList()
                     }
-                }
-
-                AddTodoInput(
-                    value = newTodoText,
-                    onValueChange = { newTodoText = it },
-                    onAddClick = {
-                        if (newTodoText.isNotBlank()) {
-                            todoViewModel.addTodo(newTodoText)
-                            newTodoText = ""
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Wrap TodoList in a weight modifier to push the ad to the bottom
-                Box(modifier = Modifier.weight(1f)) {
-                    TodoList(
-                        todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
-                            when (sortOrder) {
-                                SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
-                                SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
-                                SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
-                                SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
-                            }
-                        },
-                        onToggleTodo = { todoViewModel.toggleTodo(it) },
-                        onDeleteTodo = { todoViewModel.deleteTodo(it) },
-                        onEditTodo = { id, newText -> todoViewModel.editTodo(id, newText) }
-                    )
-                }
-
-                // Add the AdMobBanner at the bottom
-                AdMobBanner(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                )
+                },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(onClick = { pickImageLauncher.launch("image/*") }) {
+                Icon(Icons.Filled.AttachFile, contentDescription = "Attach file")
             }
         }
 
-        // Add the draggable ProgressGauge
-        ProgressGauge(
-            progress = progress,
-            modifier = Modifier
-                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-                .padding(16.dp)
-                .align(Alignment.BottomStart)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        offsetX += dragAmount.x
-                        offsetY += dragAmount.y
-                    }
-                }
-        )
-    }
-
-    if (showSortDialog) {
-        AlertDialog(
-            onDismissRequest = { showSortDialog = false },
-            title = { Text("Sort Tasks") },
-            text = {
-                Column {
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.DATE_DESC
-                        showSortDialog = false
-                    }) {
-                        Text("Date (Newest First)")
-                    }
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.DATE_ASC
-                        showSortDialog = false
-                    }) {
-                        Text("Date (Oldest First)")
-                    }
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.ALPHABET_ASC
-                        showSortDialog = false
-                    }) {
-                        Text("Alphabetically (A-Z)")
-                    }
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.ALPHABET_DESC
-                        showSortDialog = false
-                    }) {
-                        Text("Alphabetically (Z-A)")
-                    }
-                }
+        TodoList(
+            todos = todoViewModel.todos,
+            onToggleTodo = { todoViewModel.toggleTodo(it) },
+            onDeleteTodo = { todoViewModel.deleteTodo(it) },
+            onEditTodo = { id, newText, newAttachments ->
+                todoViewModel.editTodo(id, newText, newAttachments)
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showSortDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 16.dp)
         )
     }
 }
+
 
 @Composable
 fun AddTodoInput(
@@ -998,63 +907,6 @@ fun AnimatedGradientBackground(content: @Composable () -> Unit) {
 
 
 @Composable
-fun SearchBar(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    val gradient = Brush.horizontalGradient(
-        colors = listOf(Color(0xFF1E88E5), Color(0xFF42A5F5))
-    )
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .shadow(4.dp, RoundedCornerShape(24.dp))
-            .clip(RoundedCornerShape(24.dp))
-            .background(brush = gradient)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = LocalTextStyle.current.copy(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color.White
-                ),
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (query.isEmpty()) {
-                            Text(
-                                "Search",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Normal
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(vertical = 8.dp)
-            )
-        }
-    }
-}
-
-@Composable
 fun Greeting() {
     val calendar = Calendar.getInstance()
     val greeting = when (calendar.get(Calendar.HOUR_OF_DAY)) {
@@ -1077,32 +929,48 @@ fun TaskCount(count: Int) {
 }
 
 @Composable
-fun TodoList(todos: List<Todo>, onToggleTodo: (Int) -> Unit, onDeleteTodo: (Int) -> Unit, onEditTodo: (Int, String) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
+fun TodoList(
+    todos: List<Todo>,
+    onToggleTodo: (Int) -> Unit,
+    onDeleteTodo: (Int) -> Unit,
+    onEditTodo: (Int, String, List<Uri>) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(modifier = modifier) {
         items(todos) { todo ->
-            TodoItem(todo, onToggleTodo, onDeleteTodo, onEditTodo)
+            TodoItem(
+                todo = todo,
+                onToggle = { onToggleTodo(todo.id) },
+                onDelete = { onDeleteTodo(todo.id) },
+                onEdit = { newText, newAttachments ->
+                    onEditTodo(todo.id, newText, newAttachments)
+                }
+            )
         }
     }
 }
 
 
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun TodoItem(
     todo: Todo,
-    onToggle: (Int) -> Unit,
-    onDelete: (Int) -> Unit,
-    onEdit: (Int, String) -> Unit
+    onToggle: () -> Unit,
+    onDelete: () -> Unit,
+    onEdit: (String, List<Uri>) -> Unit
 ) {
     var showDeletePrompt by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
     var editedText by remember(todo.id) { mutableStateOf(todo.task) }
+    var editedAttachments by remember(todo.id) { mutableStateOf<List<Uri>>(emptyList()) }
+
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        editedAttachments = uris
+    }
 
     Card(
         modifier = Modifier
@@ -1129,7 +997,10 @@ fun TodoItem(
                 IconButton(
                     onClick = {
                         isEditing = !isEditing
-                        if (isEditing) editedText = todo.task
+                        if (isEditing) {
+                            editedText = todo.task
+                            editedAttachments = emptyList()
+                        }
                     },
                     modifier = Modifier.size(24.dp)
                 ) {
@@ -1190,29 +1061,76 @@ fun TodoItem(
                         )
                     )
                 }
+
+                // Display attachments
+                if (todo.attachments.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        maxItemsInEachRow = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        todo.attachments.forEach { attachment ->
+                            Image(
+                                painter = rememberAsyncImagePainter(File(attachment)),
+                                contentDescription = "Attached image",
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .shadow(4.dp, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                        }
+                    }
+                }
             }
 
             if (isEditing) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     TextButton(onClick = {
                         isEditing = false
-                        editedText = todo.task  // Reset to original text
+                        editedText = todo.task
+                        editedAttachments = emptyList()
                     }) {
                         Text("Cancel")
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
-                            onEdit(todo.id, editedText)
+                            onEdit(editedText, editedAttachments)
                             isEditing = false
                         },
-                        enabled = editedText.isNotBlank() && editedText != todo.task
+                        enabled = editedText.isNotBlank() && (editedText != todo.task || editedAttachments.isNotEmpty())
                     ) {
                         Text("Save")
+                    }
+                    IconButton(onClick = { pickImageLauncher.launch("image/*") }) {
+                        Icon(Icons.Filled.AttachFile, contentDescription = "Attach file")
+                    }
+                }
+
+                // Display edited attachments
+                if (editedAttachments.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        maxItemsInEachRow = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        editedAttachments.forEach { uri ->
+                            Image(
+                                painter = rememberAsyncImagePainter(uri),
+                                contentDescription = "Edited attachment",
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .shadow(4.dp, RoundedCornerShape(8.dp))
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                        }
                     }
                 }
             }
