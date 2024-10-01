@@ -80,4 +80,6 @@ dependencies {
 
     // Add Ad Mediation adapters (example for AdMob and Facebook Audience Network)
     implementation("com.google.ads.mediation:facebook:6.14.0.0")
+    implementation("io.coil-kt:coil-compose:2.2.2")
+    implementation("io.coil-kt:coil-gif:2.2.2")
 }

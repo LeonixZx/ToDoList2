@@ -107,7 +107,17 @@ import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 
+import android.os.Build
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import coil.ImageLoader
+import coil.compose.rememberAsyncImagePainter
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.request.ImageRequest
 
+import androidx.compose.ui.layout.ContentScale
 
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
@@ -368,6 +378,18 @@ fun TopSection(
 
     val brush = Brush.linearGradient(colors = colors)
 
+    // Set up GIF loader
+    val context = LocalContext.current
+    val imageLoader = ImageLoader.Builder(context)
+        .components {
+            if (Build.VERSION.SDK_INT >= 28) {
+                add(ImageDecoderDecoder.Factory())
+            } else {
+                add(GifDecoder.Factory())
+            }
+        }
+        .build()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -376,6 +398,25 @@ fun TopSection(
             .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
             .background(brush = brush)
     ) {
+        // Add GIF on the right side
+        Image(
+            painter = rememberAsyncImagePainter(
+                ImageRequest.Builder(context)
+                    .data(data = R.drawable.todo_animation) // Make sure this matches your GIF filename
+                    .apply(block = {
+                        size(coil.size.Size.ORIGINAL)
+                    }).build(),
+                imageLoader = imageLoader
+            ),
+            contentDescription = "Animated GIF",
+            modifier = Modifier
+                .size(400.dp) //
+                .align(Alignment.CenterEnd)
+                .padding(end = 1.dp) // 16
+                .alpha(0.3f), // Adjust alpha to make it more or less visible 0.3f
+            contentScale = ContentScale.Crop //FIT, or Crop
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
