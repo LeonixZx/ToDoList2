@@ -107,6 +107,8 @@ import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 
+
+
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
     private var interstitialAd: InterstitialAd? = null
