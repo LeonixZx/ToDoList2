@@ -104,6 +104,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.material.icons.filled.DirectionsRun
 
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
     private var interstitialAd: InterstitialAd? = null
@@ -381,7 +384,20 @@ fun TopSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Tasks", style = MaterialTheme.typography.titleLarge, color = Color.White)
+                Text(
+                    text = "Simple ToDoList",
+                    style = TextStyle(
+                        fontFamily = FontFamily.Cursive,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 36.sp,
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.3f),
+                            offset = Offset(2f, 2f),
+                            blurRadius = 4f
+                        )
+                    ),
+                    color = Color.White
+                )
                 Row {
                     IconButton(onClick = onExport) {
                         Icon(Icons.Filled.Upload, contentDescription = "Export", tint = Color.White)
