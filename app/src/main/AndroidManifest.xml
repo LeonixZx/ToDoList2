@@ -17,7 +17,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ToDoList"
         tools:targetApi="31">
-
+        <!-- Keep your existing meta-data for AdMob App ID -->
         <!-- Keep your existing meta-data for AdMob App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
