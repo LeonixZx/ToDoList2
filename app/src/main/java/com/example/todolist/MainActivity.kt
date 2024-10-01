@@ -119,9 +119,16 @@ import coil.request.ImageRequest
 
 import androidx.compose.ui.layout.ContentScale
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 class MainActivity : ComponentActivity() {
+    private companion object {
+        private const val AD_LOAD_COOLDOWN = 60000L // 1 minute cooldown
+    }
     private val todoViewModel: TodoViewModel by viewModels()
     private var interstitialAd: InterstitialAd? = null
+    private lateinit var appOpenAdManager: AppOpenAdManager
 
     private fun getAdMobDeviceId() {
         val adRequest = AdRequest.Builder().build()
@@ -139,6 +146,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize AppOpenAdManager
+        appOpenAdManager = (application as TodoApplication).appOpenAdManager
 
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         Log.d("TestDeviceID", "Use this ID for testing: $deviceId")
@@ -181,7 +191,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var lastAdLoadAttempt = 0L
+    private val AD_LOAD_COOLDOWN = 60000L // 1 minute cooldown
+
     private fun loadInterstitialAd() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastAdLoadAttempt < AD_LOAD_COOLDOWN) {
+            Log.d("AdMob", "Skipping ad load due to cooldown")
+            return
+        }
+        lastAdLoadAttempt = currentTime
+
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             this,
@@ -228,8 +248,8 @@ class MainActivity : ComponentActivity() {
     private fun retryWithExponentialBackoff(
         attemptNumber: Int = 0,
         maxAttempts: Int = 3,
-        initialDelay: Long = 1000,
-        maxDelay: Long = 60000,
+        initialDelay: Long = 5000, // Increased from 1000 to 5000 milliseconds
+        maxDelay: Long = 300000,   // Increased from 60000 to 300000 milliseconds (5 minutes)
         factor: Double = 2.0,
         action: () -> Unit
     ) {
@@ -264,11 +284,19 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun ShowInterstitialAd(onAdClosed: () -> Unit) {
+        val canShowAd = remember { mutableStateOf(true) }
+        val coroutineScope = rememberCoroutineScope()
+
         LaunchedEffect(Unit) {
-            if (interstitialAd != null) {
+            if (canShowAd.value && interstitialAd != null) {
                 interstitialAd?.show(this@MainActivity)
+                canShowAd.value = false
+                coroutineScope.launch {
+                    delay(AD_LOAD_COOLDOWN)
+                    canShowAd.value = true
+                }
             } else {
-                Log.w("AdMob", "Interstitial ad not loaded yet")
+                Log.w("AdMob", "Interstitial ad not loaded or cooldown in effect")
                 onAdClosed()
             }
         }

@@ -2,11 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Add these two lines for AdMob permissions -->
+    <!-- Keep your existing permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
+        android:name=".TodoApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -15,15 +16,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ToDoList"
-        android:name=".TodoApplication"
         tools:targetApi="31">
 
-        <!-- AdMob App ID -->
+        <!-- Keep your existing meta-data for AdMob App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-2107817689571311~8566453056"/>
-        <!-- android:value="ca-app-pub-3940256099942544~3347511713"/>-->
-
 
         <activity
             android:name=".MainActivity"
