@@ -93,6 +93,16 @@ import android.net.NetworkCapabilities
 import kotlin.math.pow
 import kotlin.random.Random
 
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
+
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.material.icons.filled.DirectionsRun
 
 class MainActivity : ComponentActivity() {
     private val todoViewModel: TodoViewModel by viewModels()
@@ -268,6 +278,72 @@ class CustomTopShape(private val cornerRadius: Float) : Shape {
 }
 
 @Composable
+fun ProgressGauge(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
+    )
+
+    Box(
+        modifier = modifier
+            .size(60.dp, 120.dp)
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(30.dp),
+                clip = true
+            )
+            .clip(RoundedCornerShape(30.dp))
+            .background(Color(0x40FFFFFF)) // Very transparent white background
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        0.0f to Color(0xCC1A237E),  // Dark blue at bottom (80% opaque)
+                        0.3f to Color(0xCC3949AB),  // Slightly brighter blue at 30% (80% opaque)
+                        0.7f to Color(0xCC3F51B5),  // Even brighter blue at 70% (80% opaque)
+                        1.0f to Color(0xCC5C6BC0)   // Brightest blue at top (80% opaque)
+                    )
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(1f - animatedProgress)
+                .align(Alignment.TopCenter)
+                .background(Color(0x80FFFFFF))  // Semi-transparent overlay
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = "Task Progress Icon",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${(animatedProgress * 100).toInt()}%",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+        }
+    }
+}
+
+
+@Composable
 fun TopSection(
     todoViewModel: TodoViewModel,
     selectedCategory: TaskCategory,
@@ -433,6 +509,15 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
     var showSortDialog by remember { mutableStateOf(false) }
     var showAd by remember { mutableStateOf(true) }
 
+    // Add these lines for the draggable gauge
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
+    // Calculate the progress
+    val totalTasks = todoViewModel.todos.size
+    val completedTasks = todoViewModel.todos.count { it.isCompleted }
+    val progress = if (totalTasks > 0) completedTasks.toFloat() / totalTasks else 0f
+
     // Show interstitial ad
     if (showAd) {
         AdMobInterstitial(
@@ -442,80 +527,98 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
         )
     }
 
-    Scaffold { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            TopSection(
-                todoViewModel = todoViewModel,
-                selectedCategory = selectedCategory,
-                onCategorySelected = { selectedCategory = it },
-                onExport = onExport,
-                onImport = onImport
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold { innerPadding ->
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .padding(innerPadding)
             ) {
-                SearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    modifier = Modifier.weight(1f)
+                TopSection(
+                    todoViewModel = todoViewModel,
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { selectedCategory = it },
+                    onExport = onExport,
+                    onImport = onImport
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = { showSortDialog = true },
-                    modifier = Modifier.size(40.dp)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.Sort, contentDescription = "Sort")
-                }
-            }
-
-            AddTodoInput(
-                value = newTodoText,
-                onValueChange = { newTodoText = it },
-                onAddClick = {
-                    if (newTodoText.isNotBlank()) {
-                        todoViewModel.addTodo(newTodoText)
-                        newTodoText = ""
+                    SearchBar(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { showSortDialog = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Filled.Sort, contentDescription = "Sort")
                     }
-                },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
+                }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Wrap TodoList in a weight modifier to push the ad to the bottom
-            Box(modifier = Modifier.weight(1f)) {
-                TodoList(
-                    todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
-                        when (sortOrder) {
-                            SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
-                            SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
-                            SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
-                            SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
+                AddTodoInput(
+                    value = newTodoText,
+                    onValueChange = { newTodoText = it },
+                    onAddClick = {
+                        if (newTodoText.isNotBlank()) {
+                            todoViewModel.addTodo(newTodoText)
+                            newTodoText = ""
                         }
                     },
-                    onToggleTodo = { todoViewModel.toggleTodo(it) },
-                    onDeleteTodo = { todoViewModel.deleteTodo(it) },
-                    onEditTodo = { id, newText -> todoViewModel.editTodo(id, newText) }
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Wrap TodoList in a weight modifier to push the ad to the bottom
+                Box(modifier = Modifier.weight(1f)) {
+                    TodoList(
+                        todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
+                            when (sortOrder) {
+                                SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
+                                SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
+                                SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
+                                SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
+                            }
+                        },
+                        onToggleTodo = { todoViewModel.toggleTodo(it) },
+                        onDeleteTodo = { todoViewModel.deleteTodo(it) },
+                        onEditTodo = { id, newText -> todoViewModel.editTodo(id, newText) }
+                    )
+                }
+
+                // Add the AdMobBanner at the bottom
+                AdMobBanner(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
                 )
             }
-
-            // Add the AdMobBanner at the bottom
-            AdMobBanner(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            )
         }
+
+        // Add the draggable ProgressGauge
+        ProgressGauge(
+            progress = progress,
+            modifier = Modifier
+                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                .padding(16.dp)
+                .align(Alignment.BottomStart)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        offsetX += dragAmount.x
+                        offsetY += dragAmount.y
+                    }
+                }
+        )
     }
 
     if (showSortDialog) {
