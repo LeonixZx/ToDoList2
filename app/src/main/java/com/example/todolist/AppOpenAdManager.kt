@@ -50,7 +50,8 @@ class AppOpenAdManager(private val application: Application) : DefaultLifecycleO
 
         AppOpenAd.load(
             application,
-            "ca-app-pub-3940256099942544/3419835294", // Ensure this is correct for App Open ads
+            "ca-app-pub-2107817689571311/7310943642", // Ensure this is correct for App Open ads,   ca-app-pub-3940256099942544/3419835294 (Test Ads)
+
             request,
             object : AppOpenAd.AppOpenAdLoadCallback() {
                 override fun onAdLoaded(ad: AppOpenAd) {

@@ -205,7 +205,7 @@ class MainActivity : ComponentActivity() {
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             this,
-            "ca-app-pub-3940256099942544/1033173712", // Test ID
+            "ca-app-pub-2107817689571311/7365052025", // Test ID (ca-app-pub-3940256099942544/1033173712)
             adRequest,
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
@@ -1267,7 +1267,7 @@ fun AdMobBanner(modifier: Modifier = Modifier) {
         factory = { context ->
             AdView(context).apply {
                 setAdSize(AdSize.BANNER)
-                adUnitId = "ca-app-pub-3940256099942544/6300978111" // Your mediated banner ad unit ID
+                adUnitId = "ca-app-pub-2107817689571311/2329181913" // Your mediated banner ad unit ID  ca-app-pub-3940256099942544/6300978111 (Test Ids)
                 loadAd(AdManager.createAdRequest())
                 adListener = object : AdListener() {
                     override fun onAdLoaded() {
