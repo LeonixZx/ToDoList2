@@ -3,6 +3,7 @@ package com.example.todolist
 import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,13 +13,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import android.util.Base64
+import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.UUID
-
-
-
 
 class TodoViewModel(application: Application) : AndroidViewModel(application) {
+    private val context = application.applicationContext
     private val repository = TodoRepository(application)
     private val _todos = mutableStateListOf<Todo>()
     val todos: List<Todo> = _todos
@@ -38,18 +38,33 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addTodo(task: String, attachments: List<Uri>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val savedAttachments = saveAttachments(attachments)
+    fun addTodo(task: String, imageUri: Uri? = null) {
+        viewModelScope.launch {
+            val newImageUri = imageUri?.let { saveImageToInternalStorage(it) }
             val newTodo = Todo(
                 id = (_todos.maxOfOrNull { it.id } ?: 0) + 1,
                 task = task,
-                attachments = savedAttachments
+                imageUri = newImageUri?.toString()
             )
-            withContext(Dispatchers.Main) {
-                _todos.add(newTodo)
-            }
+            _todos.add(newTodo)
             saveTasks()
+        }
+    }
+
+    private fun saveImageToInternalStorage(uri: Uri): Uri? {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+            val file = File(context.filesDir, "images/${System.currentTimeMillis()}_${uri.lastPathSegment}")
+            file.parentFile?.mkdirs()
+            inputStream?.use { input ->
+                file.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Uri.fromFile(file)
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "Error saving image: ${e.message}")
+            null
         }
     }
 
@@ -64,18 +79,27 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteTodo(id: Int) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             val todoToDelete = _todos.find { it.id == id }
-            todoToDelete?.attachments?.forEach { deleteAttachment(it) }
-            withContext(Dispatchers.Main) {
-                _todos.removeAll { it.id == id }
+            todoToDelete?.let {
+                it.imageUri?.let { uri ->
+                    if (_todos.count { it.imageUri == uri } == 1) {
+                        try {
+                            val file = File(Uri.parse(uri).path!!)
+                            if (file.exists()) {
+                                file.delete()
+                            } else {
+                                Log.w("TodoViewModel", "Image file not found: $uri")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("TodoViewModel", "Error deleting image file: ${e.message}")
+                        }
+                    }
+                }
             }
+            _todos.removeAll { it.id == id }
             saveTasks()
         }
-    }
-
-    private fun deleteAttachment(filePath: String) {
-        File(filePath).delete()
     }
 
     private fun saveTasks() {
@@ -86,8 +110,13 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun exportTasks(contentResolver: ContentResolver, uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
-            contentResolver.openOutputStream(uri)?.use { outputStream ->
-                outputStream.write(gson.toJson(_todos).toByteArray())
+            val tasksWithEncodedImages = _todos.map { todo ->
+                todo.copy(
+                    imageUri = todo.imageUri?.let { encodeImageToBase64(it) }
+                )
+            }
+            contentResolver.openOutputStream(uri, "wt")?.use { outputStream ->
+                outputStream.write(gson.toJson(tasksWithEncodedImages).toByteArray())
             }
         }
     }
@@ -99,40 +128,41 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
                 val importedTodos = gson.fromJson<List<Todo>>(jsonString, object : TypeToken<List<Todo>>() {}.type)
                 withContext(Dispatchers.Main) {
                     _todos.clear()
-                    _todos.addAll(importedTodos)
+                    _todos.addAll(importedTodos.map { todo ->
+                        todo.copy(
+                            imageUri = todo.imageUri?.let { decodeBase64ToImage(it) }
+                        )
+                    })
                 }
                 saveTasks()
             }
         }
     }
 
-    fun editTodo(id: Int, newText: String, newAttachments: List<Uri>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val index = _todos.indexOfFirst { it.id == id }
-            if (index != -1) {
-                val oldAttachments = _todos[index].attachments
-                val savedNewAttachments = saveAttachments(newAttachments)
-                withContext(Dispatchers.Main) {
-                    _todos[index] = _todos[index].copy(
-                        task = newText,
-                        attachments = oldAttachments + savedNewAttachments
-                    )
-                }
-                saveTasks()
-            }
-        }
-    }
-
-    private fun saveAttachments(attachments: List<Uri>): List<String> {
-        return attachments.mapNotNull { uri ->
-            val inputStream = getApplication<Application>().contentResolver.openInputStream(uri)
-            val file = File(getApplication<Application>().filesDir, "attachment_${UUID.randomUUID()}")
-            inputStream?.use { input ->
-                FileOutputStream(file).use { output ->
-                    input.copyTo(output)
+    fun editTodo(id: Int, newText: String, newImageUri: Uri?) {
+        val index = _todos.indexOfFirst { it.id == id }
+        if (index != -1) {
+            val oldImageUri = _todos[index].imageUri
+            val updatedImageUri = newImageUri?.let { saveImageToInternalStorage(it) }?.toString()
+            _todos[index] = _todos[index].copy(
+                task = newText,
+                imageUri = updatedImageUri
+            )
+            if (oldImageUri != updatedImageUri && oldImageUri != null) {
+                if (_todos.count { it.imageUri == oldImageUri } == 0) {
+                    try {
+                        val file = File(Uri.parse(oldImageUri).path!!)
+                        if (file.exists()) {
+                            file.delete()
+                        } else {
+                            Log.w("TodoViewModel", "Old image file not found: $oldImageUri")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("TodoViewModel", "Error deleting old image file: ${e.message}")
+                    }
                 }
             }
-            file.absolutePath
+            saveTasks()
         }
     }
 
@@ -144,6 +174,59 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
                         TaskCategory.DONE -> todo.isCompleted
                         TaskCategory.ALL -> true
                     }
+        }
+    }
+
+
+    fun downloadImage(imageUri: String, contentResolver: ContentResolver, destinationUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val sourceFile = File(Uri.parse(imageUri).path!!)
+                if (sourceFile.exists()) {
+                    contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
+                        sourceFile.inputStream().use { inputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    Log.d("TodoViewModel", "Image downloaded successfully")
+                } else {
+                    Log.e("TodoViewModel", "Source image file not found")
+                }
+            } catch (e: Exception) {
+                Log.e("TodoViewModel", "Error downloading image: ${e.message}")
+            }
+        }
+    }
+
+
+    private fun encodeImageToBase64(imagePath: String): String? {
+        return try {
+            val imageFile = File(Uri.parse(imagePath).path!!)
+            if (!imageFile.exists()) {
+                Log.e("TodoViewModel", "Image file not found: $imagePath")
+                return null
+            }
+            FileInputStream(imageFile).use { inputStream ->
+                val bytes = ByteArray(imageFile.length().toInt())
+                inputStream.read(bytes)
+                Base64.encodeToString(bytes, Base64.DEFAULT)
+            }
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "Error encoding image to Base64: ${e.message}")
+            null
+        }
+    }
+
+    private fun decodeBase64ToImage(base64String: String): String? {
+        return try {
+            val decodedBytes = Base64.decode(base64String, Base64.DEFAULT)
+            val file = File(context.filesDir, "images/${System.currentTimeMillis()}.jpg")
+            file.parentFile?.mkdirs()
+            FileOutputStream(file).use { it.write(decodedBytes) }
+            Uri.fromFile(file).toString()
+        } catch (e: Exception) {
+            Log.e("TodoViewModel", "Error decoding Base64 to image: ${e.message}")
+            null
         }
     }
 }

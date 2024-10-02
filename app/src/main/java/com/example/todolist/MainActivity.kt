@@ -116,16 +116,32 @@ import coil.compose.rememberAsyncImagePainter
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
+
 import androidx.compose.ui.layout.ContentScale
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.io.File
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import coil.compose.AsyncImage
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.AttachFile
+
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.material.icons.outlined.Image
 
 class MainActivity : ComponentActivity() {
     private companion object {
@@ -142,7 +158,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        uri?.let { todoViewModel.exportTasks(contentResolver, it) }
+        uri?.let {
+            // Delete the existing file if it exists
+            contentResolver.openOutputStream(it, "wt")?.close()
+            todoViewModel.exportTasks(contentResolver, it)
+        }
     }
 
     private val importLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -594,69 +614,249 @@ fun rememberAuroraBackground(): Brush {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> Unit) {
+    var newTodoText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf(TaskCategory.ALL) }
-    var newTodoText by remember { mutableStateOf("") }
-    var selectedAttachments by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var sortOrder by remember { mutableStateOf(SortOrder.DATE_DESC) }
+    var showSortDialog by remember { mutableStateOf(false) }
+    var showAd by remember { mutableStateOf(true) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showFullScreenImage by remember { mutableStateOf<String?>(null) }
+    var imageUriToDownload by remember { mutableStateOf<String?>(null) }
 
-    val pickImageLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
-    ) { uris: List<Uri> ->
-        selectedAttachments = uris
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
+    val totalTasks = todoViewModel.todos.size
+    val completedTasks = todoViewModel.todos.count { it.isCompleted }
+    val progress = if (totalTasks > 0) completedTasks.toFloat() / totalTasks else 0f
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            selectedImageUri = uri
+        }
+    )
+
+    val context = LocalContext.current
+    val downloadLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("image/jpeg")
+    ) { uri ->
+        uri?.let { destinationUri ->
+            imageUriToDownload?.let { imageUri ->
+                todoViewModel.downloadImage(imageUri, context.contentResolver, destinationUri)
+            }
+        }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopSection(
-            todoViewModel = todoViewModel,
-            selectedCategory = selectedCategory,
-            onCategorySelected = { selectedCategory = it },
-            onExport = onExport,
-            onImport = onImport
+    if (showAd) {
+        AdMobInterstitial(
+            onAdClosed = {
+                showAd = false
+            }
         )
-        SearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AddTodoInput(
-                value = newTodoText,
-                onValueChange = { newTodoText = it },
-                onAddClick = {
-                    if (newTodoText.isNotBlank()) {
-                        todoViewModel.addTodo(newTodoText, selectedAttachments)
-                        newTodoText = ""
-                        selectedAttachments = emptyList()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                TopSection(
+                    todoViewModel = todoViewModel,
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { selectedCategory = it },
+                    onExport = onExport,
+                    onImport = onImport
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SearchBar(
+                        query = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { showSortDialog = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(Icons.Filled.Sort, contentDescription = "Sort")
                     }
-                },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            IconButton(onClick = { pickImageLauncher.launch("image/*") }) {
-                Icon(Icons.Filled.AttachFile, contentDescription = "Attach file")
+                }
+
+                AddTodoInput(
+                    value = newTodoText,
+                    onValueChange = { newTodoText = it },
+                    onAddClick = {
+                        if (newTodoText.isNotBlank()) {
+                            todoViewModel.addTodo(
+                                task = newTodoText,
+                                imageUri = selectedImageUri
+                            )
+                            newTodoText = ""
+                            selectedImageUri = null
+                        }
+                    },
+                    onImageClick = { imagePicker.launch("image/*") },
+                    selectedImageUri = selectedImageUri,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Box(modifier = Modifier.weight(1f)) {
+                    TodoList(
+                        todos = todoViewModel.getTodos(searchQuery, selectedCategory).let { todos ->
+                            when (sortOrder) {
+                                SortOrder.DATE_DESC -> todos.sortedByDescending { it.createdAt }
+                                SortOrder.DATE_ASC -> todos.sortedBy { it.createdAt }
+                                SortOrder.ALPHABET_ASC -> todos.sortedBy { it.task }
+                                SortOrder.ALPHABET_DESC -> todos.sortedByDescending { it.task }
+                            }
+                        },
+                        onToggleTodo = { todoViewModel.toggleTodo(it) },
+                        onDeleteTodo = { todoViewModel.deleteTodo(it) },
+                        onEditTodo = { id, newText, newImageUri ->
+                            todoViewModel.editTodo(id, newText, newImageUri)
+                        },
+                        onShowFullScreenImage = { imageUri -> showFullScreenImage = imageUri },
+                        onDownloadImage = { imageUri ->
+                            imageUriToDownload = imageUri
+                            downloadLauncher.launch("todo_image_${System.currentTimeMillis()}.jpg")
+                        }
+                    )
+                }
+
+                AdMobBanner(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                )
             }
         }
 
-        TodoList(
-            todos = todoViewModel.todos,
-            onToggleTodo = { todoViewModel.toggleTodo(it) },
-            onDeleteTodo = { todoViewModel.deleteTodo(it) },
-            onEditTodo = { id, newText, newAttachments ->
-                todoViewModel.editTodo(id, newText, newAttachments)
-            },
+        ProgressGauge(
+            progress = progress,
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = 16.dp)
+                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                .padding(16.dp)
+                .align(Alignment.BottomStart)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        offsetX += dragAmount.x
+                        offsetY += dragAmount.y
+                    }
+                }
+        )
+
+        showFullScreenImage?.let { imageUri ->
+            FullScreenImageViewer(
+                imageUri = imageUri,
+                onDismiss = { showFullScreenImage = null }
+            )
+        }
+    }
+
+    if (showSortDialog) {
+        AlertDialog(
+            onDismissRequest = { showSortDialog = false },
+            title = { Text("Sort Tasks") },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.DATE_DESC
+                        showSortDialog = false
+                    }) {
+                        Text("Date (Newest First)")
+                    }
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.DATE_ASC
+                        showSortDialog = false
+                    }) {
+                        Text("Date (Oldest First)")
+                    }
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.ALPHABET_ASC
+                        showSortDialog = false
+                    }) {
+                        Text("Alphabetically (A-Z)")
+                    }
+                    TextButton(onClick = {
+                        sortOrder = SortOrder.ALPHABET_DESC
+                        showSortDialog = false
+                    }) {
+                        Text("Alphabetically (Z-A)")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSortDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }
+
+
+@Composable
+fun FullScreenImageViewer(
+    imageUri: String,
+    onDismiss: () -> Unit
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var rotation by remember { mutableStateOf(0f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { _ ->
+                        scale = if (scale > 1f) 1f else 2f
+                    },
+                    onTap = { onDismiss() }
+                )
+            }
+    ) {
+        AsyncImage(
+            model = imageUri,
+            contentDescription = "Full-screen image",
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    rotationZ = rotation,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, rotate ->
+                        scale *= zoom
+                        rotation += rotate
+                        offset += pan
+                    }
+                },
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
 
 
 @Composable
@@ -664,6 +864,8 @@ fun AddTodoInput(
     value: String,
     onValueChange: (String) -> Unit,
     onAddClick: () -> Unit,
+    onImageClick: () -> Unit,
+    selectedImageUri: Uri?,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -684,12 +886,16 @@ fun AddTodoInput(
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = null,
-                    tint = Color.Gray,
-                    modifier = Modifier.size(20.dp)
-                )
+                IconButton(
+                    onClick = onImageClick,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (selectedImageUri != null) Icons.Filled.Image else Icons.Outlined.Image,
+                        contentDescription = "Add Image",
+                        tint = if (selectedImageUri != null) MaterialTheme.colorScheme.primary else Color.Gray
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 BasicTextField(
                     value = value,
@@ -907,6 +1113,63 @@ fun AnimatedGradientBackground(content: @Composable () -> Unit) {
 
 
 @Composable
+fun SearchBar(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val gradient = Brush.horizontalGradient(
+        colors = listOf(Color(0xFF1E88E5), Color(0xFF42A5F5))
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .shadow(4.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(brush = gradient)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White
+                ),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (query.isEmpty()) {
+                            Text(
+                                "Search",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
 fun Greeting() {
     val calendar = Calendar.getInstance()
     val greeting = when (calendar.get(Calendar.HOUR_OF_DAY)) {
@@ -933,18 +1196,23 @@ fun TodoList(
     todos: List<Todo>,
     onToggleTodo: (Int) -> Unit,
     onDeleteTodo: (Int) -> Unit,
-    onEditTodo: (Int, String, List<Uri>) -> Unit,
-    modifier: Modifier = Modifier
+    onEditTodo: (Int, String, Uri?) -> Unit,
+    onShowFullScreenImage: (String) -> Unit,
+    onDownloadImage: (String) -> Unit
 ) {
-    LazyColumn(modifier = modifier) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         items(todos) { todo ->
             TodoItem(
                 todo = todo,
-                onToggle = { onToggleTodo(todo.id) },
-                onDelete = { onDeleteTodo(todo.id) },
-                onEdit = { newText, newAttachments ->
-                    onEditTodo(todo.id, newText, newAttachments)
-                }
+                onToggle = onToggleTodo,
+                onDelete = onDeleteTodo,
+                onEdit = onEditTodo,
+                onShowFullScreenImage = onShowFullScreenImage,
+                onDownloadImage = onDownloadImage
             )
         }
     }
@@ -952,25 +1220,30 @@ fun TodoList(
 
 
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TodoItem(
     todo: Todo,
-    onToggle: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: (String, List<Uri>) -> Unit
+    onToggle: (Int) -> Unit,
+    onDelete: (Int) -> Unit,
+    onEdit: (Int, String, Uri?) -> Unit,
+    onShowFullScreenImage: (String) -> Unit,
+    onDownloadImage: (String) -> Unit
 ) {
     var showDeletePrompt by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
     var editedText by remember(todo.id) { mutableStateOf(todo.task) }
-    var editedAttachments by remember(todo.id) { mutableStateOf<List<Uri>>(emptyList()) }
+    var editedImageUri by remember { mutableStateOf<Uri?>(todo.imageUri?.let { Uri.parse(it) }) }
+    var hasImageChanged by remember { mutableStateOf(false) }
 
-    val pickImageLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
-    ) { uris: List<Uri> ->
-        editedAttachments = uris
-    }
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            editedImageUri = uri
+            hasImageChanged = true
+        }
+    )
 
     Card(
         modifier = Modifier
@@ -997,10 +1270,7 @@ fun TodoItem(
                 IconButton(
                     onClick = {
                         isEditing = !isEditing
-                        if (isEditing) {
-                            editedText = todo.task
-                            editedAttachments = emptyList()
-                        }
+                        if (isEditing) editedText = todo.task
                     },
                     modifier = Modifier.size(24.dp)
                 ) {
@@ -1061,28 +1331,6 @@ fun TodoItem(
                         )
                     )
                 }
-
-                // Display attachments
-                if (todo.attachments.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        maxItemsInEachRow = 3,
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        todo.attachments.forEach { attachment ->
-                            Image(
-                                painter = rememberAsyncImagePainter(File(attachment)),
-                                contentDescription = "Attached image",
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .shadow(4.dp, RoundedCornerShape(8.dp))
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
-                        }
-                    }
-                }
             }
 
             if (isEditing) {
@@ -1091,45 +1339,64 @@ fun TodoItem(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    Button(
+                        onClick = { imagePicker.launch("image/*") },
+                        colors = ButtonDefaults.buttonColors()
+                    ) {
+                        Icon(
+                            imageVector = if (hasImageChanged) Icons.Default.Check else Icons.Default.Image,
+                            contentDescription = "Change Image"
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (hasImageChanged) "Image Changed" else "Change Image")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
                     TextButton(onClick = {
                         isEditing = false
                         editedText = todo.task
-                        editedAttachments = emptyList()
+                        editedImageUri = todo.imageUri?.let { Uri.parse(it) }
+                        hasImageChanged = false
                     }) {
                         Text("Cancel")
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
-                            onEdit(editedText, editedAttachments)
+                            onEdit(todo.id, editedText, editedImageUri)
                             isEditing = false
+                            hasImageChanged = false
                         },
-                        enabled = editedText.isNotBlank() && (editedText != todo.task || editedAttachments.isNotEmpty())
+                        enabled = editedText.isNotBlank() && (editedText != todo.task || editedImageUri != todo.imageUri?.let { Uri.parse(it) })
                     ) {
                         Text("Save")
                     }
-                    IconButton(onClick = { pickImageLauncher.launch("image/*") }) {
-                        Icon(Icons.Filled.AttachFile, contentDescription = "Attach file")
-                    }
                 }
+            }
 
-                // Display edited attachments
-                if (editedAttachments.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        maxItemsInEachRow = 3,
+            if (expanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                todo.imageUri?.let { imageUriString ->
+                    AsyncImage(
+                        model = imageUriString,
+                        contentDescription = "Todo Image",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onShowFullScreenImage(imageUriString) },
+                        contentScale = ContentScale.Crop
+                    )
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        editedAttachments.forEach { uri ->
-                            Image(
-                                painter = rememberAsyncImagePainter(uri),
-                                contentDescription = "Edited attachment",
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .shadow(4.dp, RoundedCornerShape(8.dp))
-                                    .clip(RoundedCornerShape(8.dp))
-                            )
+                        IconButton(onClick = { onDownloadImage(imageUriString) }) {
+                            Icon(Icons.Default.Download, contentDescription = "Download Image")
                         }
                     }
                 }
@@ -1158,6 +1425,7 @@ fun TodoItem(
         )
     }
 }
+
 
 
 @Composable
