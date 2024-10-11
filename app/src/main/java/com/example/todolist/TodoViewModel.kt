@@ -17,6 +17,8 @@ import android.util.Base64
 import java.io.FileInputStream
 import java.io.FileOutputStream
 
+import java.util.Date
+
 class TodoViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
     private val repository = TodoRepository(application)
@@ -34,6 +36,26 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) {
                 _todos.clear()
                 _todos.addAll(loadedTodos)
+            }
+        }
+    }
+
+    fun setReminder(id: Int, reminderDate: Date) {
+        viewModelScope.launch {
+            val index = _todos.indexOfFirst { it.id == id }
+            if (index != -1) {
+                _todos[index] = _todos[index].copy(reminder = reminderDate)
+                saveTasks()
+            }
+        }
+    }
+
+    fun removeReminder(id: Int) {
+        viewModelScope.launch {
+            val index = _todos.indexOfFirst { it.id == id }
+            if (index != -1) {
+                _todos[index] = _todos[index].copy(reminder = null)
+                saveTasks()
             }
         }
     }
@@ -167,7 +189,7 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun getTodos(query: String, category: TaskCategory): List<Todo> {
-        return _todos.filter { todo ->
+        return todos.filter { todo ->
             (todo.task.contains(query, ignoreCase = true)) &&
                     when (category) {
                         TaskCategory.TODO -> !todo.isCompleted

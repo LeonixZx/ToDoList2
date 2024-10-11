@@ -1,147 +1,79 @@
 package com.example.todolist
 
+import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import java.text.SimpleDateFormat
-import java.util.*
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.alpha
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CheckCircleOutline
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.zIndex
-
-import com.google.android.gms.ads.*
-import com.google.android.gms.ads.interstitial.InterstitialAd
-import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
-import androidx.compose.ui.viewinterop.AndroidView
-import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
-
-import android.util.Log
-import android.os.Handler
-import android.os.Looper
-
-import android.app.Activity
-import androidx.compose.ui.platform.LocalContext
-import com.google.android.gms.ads.AdError
-import com.google.android.gms.ads.FullScreenContentCallback
-import com.google.android.gms.ads.LoadAdError
-import com.google.android.gms.ads.AdListener
-import com.google.android.gms.ads.MobileAds
-import android.provider.Settings
-
-import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import kotlin.math.pow
-import kotlin.random.Random
-
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
-
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.material.icons.filled.DirectionsRun
-
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-
-import android.os.Build
-import androidx.compose.foundation.Image
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.*
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import coil.ImageLoader
+import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import coil.request.ImageRequest
-
-import androidx.compose.ui.layout.ContentScale
-
+import com.google.android.gms.ads.*
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.lifecycle.viewmodel.compose.viewModel
-import java.io.File
-
-import androidx.activity.compose.rememberLauncherForActivityResult
-import coil.compose.AsyncImage
-import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.AttachFile
-
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.ui.graphics.graphicsLayer
-
-import androidx.compose.material.icons.outlined.Image
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.TimeUnit
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.random.Random
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.animation.animateContentSize
 
 class MainActivity : ComponentActivity() {
     private companion object {
@@ -171,6 +103,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createNotificationChannel()
 
         // Initialize AppOpenAdManager
         appOpenAdManager = (application as TodoApplication).appOpenAdManager
@@ -214,10 +147,10 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        observeReminders()
     }
 
     private var lastAdLoadAttempt = 0L
-    private val AD_LOAD_COOLDOWN = 60000L // 1 minute cooldown
 
     private fun loadInterstitialAd() {
         val currentTime = System.currentTimeMillis()
@@ -307,6 +240,39 @@ class MainActivity : ComponentActivity() {
                 )
     }
 
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = getString(R.string.channel_name)
+            val descriptionText = getString(R.string.channel_description)
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel("TODO_REMINDERS", name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun observeReminders() {
+        todoViewModel.todos.forEach { todo ->
+            todo.reminder?.let { reminderDate ->
+                val currentTime = System.currentTimeMillis()
+                val delay = reminderDate.time - currentTime
+                if (delay > 0) {
+                    val workRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
+                        .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                        .setInputData(workDataOf(
+                            "taskId" to todo.id,
+                            "taskTitle" to todo.task
+                        ))
+                        .build()
+                    WorkManager.getInstance(applicationContext).enqueue(workRequest)
+                }
+            }
+        }
+    }
+
     @Composable
     private fun ShowInterstitialAd(onAdClosed: () -> Unit) {
         val canShowAd = remember { mutableStateOf(true) }
@@ -328,290 +294,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
-class CustomTopShape(private val cornerRadius: Float) : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        return Outline.Generic(
-            path = Path().apply {
-                reset()
-                lineTo(size.width, 0f)
-                lineTo(size.width, size.height - cornerRadius)
-                quadraticBezierTo(size.width, size.height, size.width - cornerRadius, size.height)
-                lineTo(cornerRadius, size.height)
-                quadraticBezierTo(0f, size.height, 0f, size.height - cornerRadius)
-                close()
-            }
-        )
-    }
-}
-
-@Composable
-fun ProgressGauge(
-    progress: Float,
-    modifier: Modifier = Modifier
-) {
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
-    )
-
-    Box(
-        modifier = modifier
-            .size(60.dp, 120.dp)
-            .shadow(
-                elevation = 4.dp,
-                shape = RoundedCornerShape(30.dp),
-                clip = true
-            )
-            .clip(RoundedCornerShape(30.dp))
-            .background(Color(0x40FFFFFF)) // Very transparent white background
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        0.0f to Color(0xCC1A237E),  // Dark blue at bottom (80% opaque)
-                        0.3f to Color(0xCC3949AB),  // Slightly brighter blue at 30% (80% opaque)
-                        0.7f to Color(0xCC3F51B5),  // Even brighter blue at 70% (80% opaque)
-                        1.0f to Color(0xCC5C6BC0)   // Brightest blue at top (80% opaque)
-                    )
-                )
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(1f - animatedProgress)
-                .align(Alignment.TopCenter)
-                .background(Color(0x80FFFFFF))  // Semi-transparent overlay
-        )
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Filled.CheckCircle,
-                contentDescription = "Task Progress Icon",
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "${(animatedProgress * 100).toInt()}%",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
-            )
-        }
-    }
-}
-
-
-@Composable
-fun TopSection(
-    todoViewModel: TodoViewModel,
-    selectedCategory: TaskCategory,
-    onCategorySelected: (TaskCategory) -> Unit,
-    onExport: () -> Unit,
-    onImport: () -> Unit
-) {
-    val today = remember { SimpleDateFormat("d MMMM", Locale.getDefault()).format(Date()) }
-    val itemCount = todoViewModel.todos.size
-
-    val colors = listOf(
-        Color(0xFF9C27B0),
-        Color(0xFF3F51B5),
-        Color(0xFF2196F3),
-        Color(0xFF00BCD4)
-    )
-
-    val brush = Brush.linearGradient(colors = colors)
-
-    // Set up GIF loader
-    val context = LocalContext.current
-    val imageLoader = ImageLoader.Builder(context)
-        .components {
-            if (Build.VERSION.SDK_INT >= 28) {
-                add(ImageDecoderDecoder.Factory())
-            } else {
-                add(GifDecoder.Factory())
-            }
-        }
-        .build()
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .shadow(elevation = 8.dp, shape = RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
-            .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
-            .background(brush = brush)
-    ) {
-        // Add GIF on the right side
-        Image(
-            painter = rememberAsyncImagePainter(
-                ImageRequest.Builder(context)
-                    .data(data = R.drawable.todo_animation) // Make sure this matches your GIF filename
-                    .apply(block = {
-                        size(coil.size.Size.ORIGINAL)
-                    }).build(),
-                imageLoader = imageLoader
-            ),
-            contentDescription = "Animated GIF",
-            modifier = Modifier
-                .size(400.dp) //
-                .align(Alignment.CenterEnd)
-                .padding(end = 1.dp) // 16
-                .alpha(0.3f), // Adjust alpha to make it more or less visible 0.3f
-            contentScale = ContentScale.Crop //FIT, or Crop
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Simple ToDoList",
-                    style = TextStyle(
-                        fontFamily = FontFamily.Cursive,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 36.sp,
-                        shadow = Shadow(
-                            color = Color.Black.copy(alpha = 0.3f),
-                            offset = Offset(2f, 2f),
-                            blurRadius = 4f
-                        )
-                    ),
-                    color = Color.White
-                )
-                Row {
-                    IconButton(onClick = onExport) {
-                        Icon(Icons.Filled.Upload, contentDescription = "Export", tint = Color.White)
-                    }
-                    IconButton(onClick = onImport) {
-                        Icon(Icons.Filled.Download, contentDescription = "Import", tint = Color.White)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Today: $today",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
-            )
-            Text(
-                text = "$itemCount items",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.7f)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            CategoryButtons(selectedCategory, onCategorySelected)
-        }
-    }
-}
-
-
-
-@Composable
-fun GradientButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true
-) {
-    val gradient = Brush.horizontalGradient(
-        colors = listOf(Color(0xFF1E88E5), Color(0xFF42A5F5))
-    )
-
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
-            .background(gradient)
-            .then(Modifier.height(48.dp)),
-        enabled = enabled,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            contentColor = Color.White,
-            disabledContainerColor = Color.Transparent,
-            disabledContentColor = Color.White.copy(alpha = 0.3f)
-        ),
-        contentPadding = PaddingValues(horizontal = 16.dp)
-    ) {
-        Text(text)
-    }
-}
-
-
-@Composable
-fun TodoAppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(
-            primary = Color(0xFF5B67CA),
-            secondary = Color(0xFFFF6B6B),
-            background = Color(0xFFF8F8F8),
-            surface = Color.White,
-            onPrimary = Color.White,
-            onSecondary = Color.White,
-            onBackground = Color(0xFF1D1D1D),
-            onSurface = Color(0xFF1D1D1D)
-        ),
-        content = content
-    )
-}
-
-object AppColors {
-    val LightPurple = Color(0xFFE4E7FF)
-    val LightPink = Color(0xFFFFE4E4)
-    val LightGreen = Color(0xFFE4FFF1)
-    val LightYellow = Color(0xFFFFF8E1)
-    val DarkText = Color(0xFF1D1D1D)
-    val LightText = Color(0xFF7C7C7C)
-}
-
-enum class SortOrder {
-    DATE_DESC, DATE_ASC, ALPHABET_ASC, ALPHABET_DESC
-}
-
-@Composable
-fun rememberAuroraBackground(): Brush {
-    val colors = listOf(
-        Color(0xFFFF9AA2),
-        Color(0xFFFFB7B2),
-        Color(0xFFFFDAC1),
-        Color(0xFFE2F0CB),
-        Color(0xFFB5EAD7),
-        Color(0xFFC7CEEA)
-    )
-
-    val infiniteTransition = rememberInfiniteTransition()
-    val offset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(10000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
-    return Brush.verticalGradient(
-        colors = colors,
-        startY = offset * 1000,
-        endY = (offset + 1) * 1000
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> Unit) {
     var newTodoText by remember { mutableStateOf("") }
@@ -619,7 +301,6 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
     var selectedCategory by remember { mutableStateOf(TaskCategory.ALL) }
     var sortOrder by remember { mutableStateOf(SortOrder.DATE_DESC) }
     var showSortDialog by remember { mutableStateOf(false) }
-    var showAd by remember { mutableStateOf(true) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var showFullScreenImage by remember { mutableStateOf<String?>(null) }
     var imageUriToDownload by remember { mutableStateOf<String?>(null) }
@@ -647,14 +328,6 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
                 todoViewModel.downloadImage(imageUri, context.contentResolver, destinationUri)
             }
         }
-    }
-
-    if (showAd) {
-        AdMobInterstitial(
-            onAdClosed = {
-                showAd = false
-            }
-        )
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -733,15 +406,11 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
                         onDownloadImage = { imageUri ->
                             imageUriToDownload = imageUri
                             downloadLauncher.launch("todo_image_${System.currentTimeMillis()}.jpg")
-                        }
+                        },
+                        onSetReminder = { id, date -> todoViewModel.setReminder(id, date) },
+                        onRemoveReminder = { id -> todoViewModel.removeReminder(id) }
                     )
                 }
-
-                AdMobBanner(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                )
             }
         }
 
@@ -769,95 +438,244 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
     }
 
     if (showSortDialog) {
-        AlertDialog(
-            onDismissRequest = { showSortDialog = false },
-            title = { Text("Sort Tasks") },
-            text = {
-                Column {
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.DATE_DESC
-                        showSortDialog = false
-                    }) {
-                        Text("Date (Newest First)")
-                    }
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.DATE_ASC
-                        showSortDialog = false
-                    }) {
-                        Text("Date (Oldest First)")
-                    }
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.ALPHABET_ASC
-                        showSortDialog = false
-                    }) {
-                        Text("Alphabetically (A-Z)")
-                    }
-                    TextButton(onClick = {
-                        sortOrder = SortOrder.ALPHABET_DESC
-                        showSortDialog = false
-                    }) {
-                        Text("Alphabetically (Z-A)")
-                    }
-                }
+        SortDialog(
+            currentSortOrder = sortOrder,
+            onSortOrderSelected = {
+                sortOrder = it
+                showSortDialog = false
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showSortDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showSortDialog = false }
         )
     }
 }
 
-
 @Composable
-fun FullScreenImageViewer(
-    imageUri: String,
-    onDismiss: () -> Unit
+fun TopSection(
+    todoViewModel: TodoViewModel,
+    selectedCategory: TaskCategory,
+    onCategorySelected: (TaskCategory) -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit
 ) {
-    var scale by remember { mutableStateOf(1f) }
-    var rotation by remember { mutableStateOf(0f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    val today = remember { SimpleDateFormat("d MMMM", Locale.getDefault()).format(Date()) }
+    val itemCount = todoViewModel.todos.size
+
+    val colors = listOf(
+        Color(0xFF9C27B0),
+        Color(0xFF3F51B5),
+        Color(0xFF2196F3),
+        Color(0xFF00BCD4)
+    )
+
+    val brush = Brush.linearGradient(colors = colors)
+
+    // Set up GIF loader
+    val context = LocalContext.current
+    val imageLoader = ImageLoader.Builder(context)
+        .components {
+            if (Build.VERSION.SDK_INT >= 28) {
+                add(ImageDecoderDecoder.Factory())
+            } else {
+                add(GifDecoder.Factory())
+            }
+        }
+        .build()
 
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.9f))
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onDoubleTap = { _ ->
-                        scale = if (scale > 1f) 1f else 2f
-                    },
-                    onTap = { onDismiss() }
-                )
-            }
+            .fillMaxWidth()
+            .height(180.dp)
+            .shadow(elevation = 8.dp, shape = RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            .background(brush = brush)
     ) {
-        AsyncImage(
-            model = imageUri,
-            contentDescription = "Full-screen image",
+        // Add GIF on the right side
+        Image(
+            painter = rememberAsyncImagePainter(
+                ImageRequest.Builder(context)
+                    .data(data = R.drawable.todo_animation)
+                    .apply(block = {
+                        size(coil.size.Size.ORIGINAL)
+                    }).build(),
+                imageLoader = imageLoader
+            ),
+            contentDescription = "Animated GIF",
+            modifier = Modifier
+                .size(400.dp)
+                .align(Alignment.CenterEnd)
+                .padding(end = 1.dp)
+                .alpha(0.3f),
+            contentScale = ContentScale.Crop
+        )
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    rotationZ = rotation,
-                    translationX = offset.x,
-                    translationY = offset.y
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Simple ToDoList",
+                    style = TextStyle(
+                        fontFamily = FontFamily.Cursive,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 36.sp,
+                        shadow = Shadow(
+                            color = Color.Black.copy(alpha = 0.3f),
+                            offset = Offset(2f, 2f),
+                            blurRadius = 4f
+                        )
+                    ),
+                    color = Color.White
                 )
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, rotate ->
-                        scale *= zoom
-                        rotation += rotate
-                        offset += pan
+                Row {
+                    IconButton(onClick = onExport) {
+                        Icon(Icons.Filled.Upload, contentDescription = "Export", tint = Color.White)
                     }
-                },
-            contentScale = ContentScale.Fit
+                    IconButton(onClick = onImport) {
+                        Icon(Icons.Filled.Download, contentDescription = "Import", tint = Color.White)
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Today: $today",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White
+            )
+            Text(
+                text = "$itemCount items",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            CategoryButtons(selectedCategory, onCategorySelected)
+        }
+    }
+}
+
+@Composable
+fun CategoryButtons(selectedCategory: TaskCategory, onCategorySelected: (TaskCategory) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        CategoryButton(
+            text = "To-Do",
+            icon = Icons.Default.CheckCircleOutline,
+            selected = selectedCategory == TaskCategory.TODO,
+            onClick = { onCategorySelected(TaskCategory.TODO) },
+            modifier = Modifier.weight(1f)
+        )
+        CategoryButton(
+            text = "Done",
+            icon = Icons.Default.CheckCircle,
+            selected = selectedCategory == TaskCategory.DONE,
+            onClick = { onCategorySelected(TaskCategory.DONE) },
+            modifier = Modifier.weight(1f)
+        )
+        CategoryButton(
+            text = "All",
+            icon = Icons.Default.List,
+            selected = selectedCategory == TaskCategory.ALL,
+            onClick = { onCategorySelected(TaskCategory.ALL) },
+            modifier = Modifier.weight(1f)
         )
     }
 }
 
+@Composable
+fun CategoryButton(
+    text: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) Color.White else Color.White.copy(alpha = 0.2f),
+            contentColor = if (selected) Color(0xFF3F51B5) else Color.White
+        ),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.height(36.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
 
+@Composable
+fun SearchBar(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val gradient = Brush.horizontalGradient(
+        colors = listOf(Color(0xFF1E88E5), Color(0xFF42A5F5))
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .shadow(4.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(brush = gradient)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.Default.Search,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White
+                ),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (query.isEmpty()) {
+                            Text(
+                                "Search",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 8.dp)
+            )
+        }
+    }
+}
 
 @Composable
 fun AddTodoInput(
@@ -945,252 +763,6 @@ fun AddTodoInput(
     }
 }
 
-
-@Composable
-fun CategoryButtons(selectedCategory: TaskCategory, onCategorySelected: (TaskCategory) -> Unit) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        CategoryButton(
-            text = "To-Do",
-            icon = Icons.Default.CheckCircleOutline,
-            selected = selectedCategory == TaskCategory.TODO,
-            onClick = { onCategorySelected(TaskCategory.TODO) },
-            modifier = Modifier.weight(1f)
-        )
-        CategoryButton(
-            text = "Done",
-            icon = Icons.Default.CheckCircle,
-            selected = selectedCategory == TaskCategory.DONE,
-            onClick = { onCategorySelected(TaskCategory.DONE) },
-            modifier = Modifier.weight(1f)
-        )
-        CategoryButton(
-            text = "All",
-            icon = Icons.Default.List,
-            selected = selectedCategory == TaskCategory.ALL,
-            onClick = { onCategorySelected(TaskCategory.ALL) },
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-fun CategoryButton(
-    text: String,
-    icon: ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color.White else Color.White.copy(alpha = 0.2f),
-            contentColor = if (selected) Color(0xFF3F51B5) else Color.White
-        ),
-        shape = RoundedCornerShape(20.dp),
-        modifier = modifier.height(36.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(text, style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-
-
-@Composable
-fun TaskStatusToggle(
-    isCompleted: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val switchWidth = 62.dp
-    val switchHeight = 26.dp
-    val toggleSize = 22.dp
-
-    val interactionSource = remember { MutableInteractionSource() }
-
-    val animatedOffset by animateDpAsState(
-        targetValue = if (isCompleted) (switchWidth - toggleSize - 2.dp) else 2.dp,
-        animationSpec = tween(durationMillis = 300)
-    )
-
-    Box(
-        modifier = modifier
-            .width(switchWidth)
-            .height(switchHeight)
-            .shadow(elevation = 4.dp, shape = RoundedCornerShape(switchHeight / 2))
-            .clip(RoundedCornerShape(switchHeight / 2))
-            .background(if (isCompleted) Color(0xFF4CAF50) else Color(0xFFFF5252))
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) {
-                onToggle()
-            }
-    ) {
-        // Text
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 6.dp)
-        ) {
-            Text(
-                text = if (isCompleted) "Done" else "Todo",
-                color = Color.White,
-                fontWeight = FontWeight.Normal,
-                fontSize = 12.sp,
-                modifier = Modifier
-                    .align(if (isCompleted) Alignment.CenterStart else Alignment.CenterEnd)
-                    .zIndex(2f)
-            )
-        }
-
-        // Toggle
-        Box(
-            modifier = Modifier
-                .size(toggleSize)
-                .offset(x = animatedOffset)
-                .align(Alignment.CenterStart)
-                .shadow(elevation = 2.dp, shape = CircleShape)
-                .clip(CircleShape)
-                .background(Color.White)
-                .zIndex(3f)
-        )
-    }
-}
-
-
-
-
-@Composable
-fun AnimatedGradientBackground(content: @Composable () -> Unit) {
-    val colors = listOf(
-        Color(0xFF9C27B0),
-        Color(0xFF3F51B5),
-        Color(0xFF2196F3),
-        Color(0xFF00BCD4),
-        Color(0xFF4CAF50)
-    )
-
-    val infiniteTransition = rememberInfiniteTransition()
-    val offset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(10000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-
-    val brush = Brush.linearGradient(
-        colors = colors,
-        start = Offset(offset * 1000f, 0f),
-        end = Offset((offset + 1) * 1000f, 1000f)
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(brush = brush)
-    ) {
-        content()
-    }
-}
-
-
-
-@Composable
-fun SearchBar(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
-    val gradient = Brush.horizontalGradient(
-        colors = listOf(Color(0xFF1E88E5), Color(0xFF42A5F5))
-    )
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .shadow(4.dp, RoundedCornerShape(24.dp))
-            .clip(RoundedCornerShape(24.dp))
-            .background(brush = gradient)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.Search,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = LocalTextStyle.current.copy(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color.White
-                ),
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (query.isEmpty()) {
-                            Text(
-                                "Search",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Normal
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(vertical = 8.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun Greeting() {
-    val calendar = Calendar.getInstance()
-    val greeting = when (calendar.get(Calendar.HOUR_OF_DAY)) {
-        in 0..11 -> "Good morning"
-        in 12..16 -> "Good afternoon"
-        else -> "Good evening"
-    }
-    Text(
-        text = greeting,
-        style = MaterialTheme.typography.bodyMedium
-    )
-}
-
-@Composable
-fun TaskCount(count: Int) {
-    Text(
-        text = "$count tasks",
-        style = MaterialTheme.typography.bodySmall
-    )
-}
-
 @Composable
 fun TodoList(
     todos: List<Todo>,
@@ -1198,7 +770,9 @@ fun TodoList(
     onDeleteTodo: (Int) -> Unit,
     onEditTodo: (Int, String, Uri?) -> Unit,
     onShowFullScreenImage: (String) -> Unit,
-    onDownloadImage: (String) -> Unit
+    onDownloadImage: (String) -> Unit,
+    onSetReminder: (Int, Date) -> Unit,
+    onRemoveReminder: (Int) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1212,13 +786,13 @@ fun TodoList(
                 onDelete = onDeleteTodo,
                 onEdit = onEditTodo,
                 onShowFullScreenImage = onShowFullScreenImage,
-                onDownloadImage = onDownloadImage
+                onDownloadImage = onDownloadImage,
+                onSetReminder = onSetReminder,
+                onRemoveReminder = onRemoveReminder
             )
         }
     }
 }
-
-
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -1228,7 +802,9 @@ fun TodoItem(
     onDelete: (Int) -> Unit,
     onEdit: (Int, String, Uri?) -> Unit,
     onShowFullScreenImage: (String) -> Unit,
-    onDownloadImage: (String) -> Unit
+    onDownloadImage: (String) -> Unit,
+    onSetReminder: (Int, Date) -> Unit,
+    onRemoveReminder: (Int) -> Unit
 ) {
     var showDeletePrompt by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -1236,6 +812,7 @@ fun TodoItem(
     var editedText by remember(todo.id) { mutableStateOf(todo.task) }
     var editedImageUri by remember { mutableStateOf<Uri?>(todo.imageUri?.let { Uri.parse(it) }) }
     var hasImageChanged by remember { mutableStateOf(false) }
+    var showReminderDialog by remember { mutableStateOf(false) }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
@@ -1311,6 +888,18 @@ fun TodoItem(
                     isCompleted = todo.isCompleted,
                     onToggle = { onToggle(todo.id) }
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    onClick = { showReminderDialog = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (todo.reminder != null) Icons.Filled.Alarm else Icons.Outlined.AlarmAdd,
+                        contentDescription = if (todo.reminder != null) "Edit Reminder" else "Set Reminder",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             if (expanded || todo.task.length <= 100) {
@@ -1400,8 +989,47 @@ fun TodoItem(
                         }
                     }
                 }
+
+                todo.reminder?.let { reminderDate ->
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = "Reminder",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Reminder: ${SimpleDateFormat("MMM d, yyyy 'at' h:mm a", Locale.getDefault()).format(reminderDate)}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = { onRemoveReminder(todo.id) },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Remove Reminder",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
             }
         }
+    }
+
+    if (showReminderDialog) {
+        ReminderDialog(
+            currentReminder = todo.reminder,
+            onDismiss = { showReminderDialog = false },
+            onSetReminder = { date ->
+                onSetReminder(todo.id, date)
+                showReminderDialog = false
+            }
+        )
     }
 
     if (showDeletePrompt) {
@@ -1426,135 +1054,389 @@ fun TodoItem(
     }
 }
 
-
-
 @Composable
-fun TaskStatusChip(completed: Boolean, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = if (completed) AppColors.LightGreen.copy(alpha = 0.6f) else AppColors.LightPink,
-        contentColor = if (completed) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.secondary,
-        modifier = Modifier
-            .height(24.dp)
-    ) {
-        Text(
-            text = if (completed) "Done" else "Todo",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
+fun ReminderDialog(
+    currentReminder: Date?,
+    onDismiss: () -> Unit,
+    onSetReminder: (Date) -> Unit
+) {
+    var selectedDate by remember { mutableStateOf(currentReminder ?: Date()) }
 
-@Composable
-fun AdMobBanner(modifier: Modifier = Modifier) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            AdView(context).apply {
-                setAdSize(AdSize.BANNER)
-                adUnitId = "ca-app-pub-2107817689571311/2329181913" // Your mediated banner ad unit ID  ca-app-pub-3940256099942544/6300978111 (Test Ids)
-                loadAd(AdManager.createAdRequest())
-                adListener = object : AdListener() {
-                    override fun onAdLoaded() {
-                        Log.d("AdMob", "Mediated banner ad loaded successfully")
-                    }
-                    override fun onAdFailedToLoad(error: LoadAdError) {
-                        Log.e("AdMob", "Mediated banner ad failed to load. Error: ${error.message}")
-                        Log.e("AdMob", "Error code: ${error.code}")
-                        Log.e("AdMob", "Error domain: ${error.domain}")
-                        when (error.code) {
-                            AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
-                            AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
-                            AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
-                            AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
-                            AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
-                            else -> Log.e("AdMob", "Unknown error occurred")
-                        }
-                    }
-                    override fun onAdOpened() {
-                        Log.d("AdMob", "Mediated banner ad opened")
-                    }
-                    override fun onAdClicked() {
-                        Log.d("AdMob", "Mediated banner ad clicked")
-                    }
-                    override fun onAdClosed() {
-                        Log.d("AdMob", "Mediated banner ad closed")
-                    }
-                    override fun onAdImpression() {
-                        Log.d("AdMob", "Mediated banner ad impression recorded")
-                    }
-                }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set Reminder") },
+        text = {
+            Column {
+                DatePicker(
+                    selectedDate = selectedDate,
+                    onDateSelected = { selectedDate = it }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                TimePicker(
+                    selectedTime = selectedDate,
+                    onTimeSelected = { selectedDate = it }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSetReminder(selectedDate) }) {
+                Text("Set Reminder")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         }
     )
 }
 
 @Composable
-fun AdMobInterstitial(onAdClosed: () -> Unit) {
-    val context = LocalContext.current
-    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+fun TodoAppTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = lightColorScheme(
+            primary = Color(0xFF5B67CA),
+            secondary = Color(0xFFFF6B6B),
+            background = Color(0xFFF8F8F8),
+            surface = Color.White,
+            onPrimary = Color.White,
+            onSecondary = Color.White,
+            onBackground = Color(0xFF1D1D1D),
+            onSurface = Color(0xFF1D1D1D)
+        ),
+        content = content
+    )
+}
 
-    LaunchedEffect(Unit) {
-        InterstitialAd.load(
-            context,
-            "ca-app-pub-3940256099942544/1033173712", // Your mediated interstitial ad unit ID
-            AdManager.createAdRequest(),
-            object : InterstitialAdLoadCallback() {
-                override fun onAdLoaded(ad: InterstitialAd) {
-                    Log.d("AdMob", "Mediated interstitial ad loaded successfully")
-                    interstitialAd = ad
-                    ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-                        override fun onAdDismissedFullScreenContent() {
-                            Log.d("AdMob", "Mediated interstitial ad was dismissed")
-                            interstitialAd = null
-                            onAdClosed()
-                        }
-                        override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                            Log.e("AdMob", "Mediated interstitial ad failed to show. Error: ${adError.message}")
-                            interstitialAd = null
-                            onAdClosed()
-                        }
-                        override fun onAdShowedFullScreenContent() {
-                            Log.d("AdMob", "Mediated interstitial ad showed fullscreen content")
-                        }
-                        override fun onAdClicked() {
-                            Log.d("AdMob", "Mediated interstitial ad was clicked")
-                        }
-                        override fun onAdImpression() {
-                            Log.d("AdMob", "Mediated interstitial ad impression recorded")
-                        }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DatePicker(selectedDate: Date, onDateSelected: (Date) -> Unit) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDate.time)
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Date: ${selectedDate.toFormattedString()}")
+        IconButton(onClick = { showDatePicker = true }) {
+            Icon(Icons.Default.DateRange, contentDescription = "Select Date")
+        }
+    }
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        onDateSelected(Date(millis))
                     }
-                    showInterstitialAd(context as Activity, ad)
+                    showDatePicker = false
+                }) {
+                    Text("OK")
                 }
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    Log.e("AdMob", "Mediated interstitial ad failed to load. Error: ${error.message}")
-                    Log.e("AdMob", "Error code: ${error.code}")
-                    Log.e("AdMob", "Error domain: ${error.domain}")
-                    when (error.code) {
-                        AdRequest.ERROR_CODE_INTERNAL_ERROR -> Log.e("AdMob", "Internal error occurred")
-                        AdRequest.ERROR_CODE_INVALID_REQUEST -> Log.e("AdMob", "Invalid ad request")
-                        AdRequest.ERROR_CODE_NETWORK_ERROR -> Log.e("AdMob", "Network error occurred")
-                        AdRequest.ERROR_CODE_NO_FILL -> Log.e("AdMob", "No ad fill")
-                        AdRequest.ERROR_CODE_APP_ID_MISSING -> Log.e("AdMob", "App ID is missing")
-                        else -> Log.e("AdMob", "Unknown error occurred")
-                    }
-                    interstitialAd = null
-                    onAdClosed()
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimePicker(selectedTime: Date, onTimeSelected: (Date) -> Unit) {
+    var showTimePicker by remember { mutableStateOf(false) }
+    val calendar = Calendar.getInstance().apply { time = selectedTime }
+    val timePickerState = rememberTimePickerState(
+        initialHour = calendar.get(Calendar.HOUR_OF_DAY),
+        initialMinute = calendar.get(Calendar.MINUTE)
+    )
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Time: ${selectedTime.toFormattedTimeString()}")
+        IconButton(onClick = { showTimePicker = true }) {
+            Icon(Icons.Default.Schedule, contentDescription = "Select Time")
+        }
+    }
+
+    if (showTimePicker) {
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Select Time") },
+            text = {
+                TimePicker(state = timePickerState)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    calendar.set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                    calendar.set(Calendar.MINUTE, timePickerState.minute)
+                    onTimeSelected(calendar.time)
+                    showTimePicker = false
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    Text("Cancel")
                 }
             }
         )
     }
 }
 
-private fun showInterstitialAd(activity: Activity, ad: InterstitialAd?) {
-    if (ad != null) {
-        ad.show(activity)
-    } else {
-        Log.w("AdMob", "Interstitial ad was not ready yet.")
+@Composable
+fun ProgressGauge(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
+    )
+
+    Box(
+        modifier = modifier
+            .size(60.dp, 120.dp)
+            .shadow(
+                elevation = 4.dp,
+                shape = RoundedCornerShape(30.dp),
+                clip = true
+            )
+            .clip(RoundedCornerShape(30.dp))
+            .background(Color(0x40FFFFFF))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        0.0f to Color(0xCC1A237E),
+                        0.3f to Color(0xCC3949AB),
+                        0.7f to Color(0xCC3F51B5),
+                        1.0f to Color(0xCC5C6BC0)
+                    )
+                )
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(1f - animatedProgress)
+                .align(Alignment.TopCenter)
+                .background(Color(0x80FFFFFF))
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = "Task Progress Icon",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${(animatedProgress * 100).toInt()}%",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+        }
     }
+}
+
+@Composable
+fun FullScreenImageViewer(
+    imageUri: String,
+    onDismiss: () -> Unit
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var rotation by remember { mutableStateOf(0f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.9f))
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = { _ ->
+                        scale = if (scale > 1f) 1f else 2f
+                    },
+                    onTap = { onDismiss() }
+                )
+            }
+    ) {
+        AsyncImage(
+            model = imageUri,
+            contentDescription = "Full-screen image",
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    rotationZ = rotation,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, rotate ->
+                        scale *= zoom
+                        rotation += rotate
+                        offset += pan
+                    }
+                },
+            contentScale = ContentScale.Fit
+        )
+    }
+}
+
+@Composable
+fun SortDialog(
+    currentSortOrder: SortOrder,
+    onSortOrderSelected: (SortOrder) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sort Tasks") },
+        text = {
+            Column {
+                SortOption(
+                    text = "Date (Newest First)",
+                    selected = currentSortOrder == SortOrder.DATE_DESC,
+                    onClick = { onSortOrderSelected(SortOrder.DATE_DESC) }
+                )
+                SortOption(
+                    text = "Date (Oldest First)",
+                    selected = currentSortOrder == SortOrder.DATE_ASC,
+                    onClick = { onSortOrderSelected(SortOrder.DATE_ASC) }
+                )
+                SortOption(
+                    text = "Alphabetically (A-Z)",
+                    selected = currentSortOrder == SortOrder.ALPHABET_ASC,
+                    onClick = { onSortOrderSelected(SortOrder.ALPHABET_ASC) }
+                )
+                SortOption(
+                    text = "Alphabetically (Z-A)",
+                    selected = currentSortOrder == SortOrder.ALPHABET_DESC,
+                    onClick = { onSortOrderSelected(SortOrder.ALPHABET_DESC) }
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun SortOption(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text)
+    }
+}
+
+@Composable
+fun TaskStatusToggle(
+    isCompleted: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val switchWidth = 62.dp
+    val switchHeight = 26.dp
+    val toggleSize = 22.dp
+
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val animatedOffset by animateDpAsState(
+        targetValue = if (isCompleted) (switchWidth - toggleSize - 2.dp) else 2.dp,
+        animationSpec = tween(durationMillis = 300)
+    )
+
+    Box(
+        modifier = modifier
+            .width(switchWidth)
+            .height(switchHeight)
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(switchHeight / 2))
+            .clip(RoundedCornerShape(switchHeight / 2))
+            .background(if (isCompleted) Color(0xFF4CAF50) else Color(0xFFFF5252))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null
+            ) {
+                onToggle()
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp)
+        ) {
+            Text(
+                text = if (isCompleted) "Done" else "Todo",
+                color = Color.White,
+                fontWeight = FontWeight.Normal,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .align(if (isCompleted) Alignment.CenterStart else Alignment.CenterEnd)
+                    .zIndex(2f)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(toggleSize)
+                .offset(x = animatedOffset)
+                .align(Alignment.CenterStart)
+                .shadow(elevation = 2.dp, shape = CircleShape)
+                .clip(CircleShape)
+                .background(Color.White)
+                .zIndex(3f)
+        )
+    }
+}
+
+fun Date.toFormattedString(): String {
+    val formatter = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+    return formatter.format(this)
+}
+
+fun Date.toFormattedTimeString(): String {
+    val formatter = SimpleDateFormat("h:mm a", Locale.getDefault())
+    return formatter.format(this)
 }
 
 enum class TaskCategory {
     TODO, DONE, ALL
+}
+
+enum class SortOrder {
+    DATE_DESC, DATE_ASC, ALPHABET_ASC, ALPHABET_DESC
 }

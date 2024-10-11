@@ -80,8 +80,9 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.2.2")
     implementation("androidx.lifecycle:lifecycle-process:2.6.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
-
+    implementation ("androidx.work:work-runtime-ktx:2.8.1")
     // New dependencies for file handling
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.core:core-ktx:1.12.0")
+
 }
