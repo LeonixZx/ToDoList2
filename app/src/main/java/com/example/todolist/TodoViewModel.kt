@@ -19,6 +19,11 @@ import java.io.FileOutputStream
 
 import java.util.Date
 
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import java.util.concurrent.TimeUnit
+
 class TodoViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
     private val repository = TodoRepository(application)
@@ -40,14 +45,34 @@ class TodoViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setReminder(id: Int, reminderDate: Date) {
+    fun setReminder(id: Int, taskTitle: String, reminderDate: Date) {
         viewModelScope.launch {
             val index = _todos.indexOfFirst { it.id == id }
             if (index != -1) {
                 _todos[index] = _todos[index].copy(reminder = reminderDate)
                 saveTasks()
+                scheduleReminder(id, taskTitle, reminderDate.time - System.currentTimeMillis())
+            } else {
+                Log.e("TodoViewModel", "Attempted to set reminder for non-existent todo with ID: $id")
+                // Optionally, you could throw an exception here if you want to enforce stricter error handling
+                // throw IllegalArgumentException("No todo item found with ID: $id")
             }
         }
+    }
+
+
+    private fun scheduleReminder(id: Int, taskTitle: String, delay: Long) {
+        val workRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(
+                workDataOf(
+                    "taskId" to id,
+                    "taskTitle" to taskTitle
+                )
+            )
+            .build()
+
+        WorkManager.getInstance(getApplication()).enqueue(workRequest)
     }
 
     fun removeReminder(id: Int) {

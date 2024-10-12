@@ -75,6 +75,15 @@ import kotlin.random.Random
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.animation.animateContentSize
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import java.util.Date
+
 class MainActivity : ComponentActivity() {
     private companion object {
         private const val AD_LOAD_COOLDOWN = 60000L // 1 minute cooldown
@@ -118,6 +127,8 @@ class MainActivity : ComponentActivity() {
                 Log.d("AdMob", "Adapter name: $adapterClass, Description: ${status.description}, Latency: ${status.latency}")
             }
         }
+
+        requestNotificationPermission()
 
         // Initialize AdManager
         AdManager.initialize(this)
@@ -203,6 +214,22 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                    0
+                )
+            }
+        }
+    }
+
     private fun retryWithExponentialBackoff(
         attemptNumber: Int = 0,
         maxAttempts: Int = 3,
@@ -260,17 +287,25 @@ class MainActivity : ComponentActivity() {
                 val currentTime = System.currentTimeMillis()
                 val delay = reminderDate.time - currentTime
                 if (delay > 0) {
-                    val workRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
-                        .setInitialDelay(delay, TimeUnit.MILLISECONDS)
-                        .setInputData(workDataOf(
-                            "taskId" to todo.id,
-                            "taskTitle" to todo.task
-                        ))
-                        .build()
-                    WorkManager.getInstance(applicationContext).enqueue(workRequest)
+                    scheduleReminder(todo.id, todo.task, delay)
                 }
             }
         }
+    }
+
+    private fun scheduleReminder(taskId: Int, taskTitle: String, delay: Long) {
+        val workRequest = OneTimeWorkRequestBuilder<ReminderWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(
+                workDataOf(
+                    "taskId" to taskId,
+                    "taskTitle" to taskTitle
+                )
+            )
+            .build()
+
+        WorkManager.getInstance(applicationContext).enqueue(workRequest)
+        Log.d("MainActivity", "Scheduled reminder for task: $taskTitle, delay: $delay ms")
     }
 
     @Composable
@@ -328,6 +363,16 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
                 todoViewModel.downloadImage(imageUri, context.contentResolver, destinationUri)
             }
         }
+    }
+
+
+    Button(
+        onClick = {
+            val testDate = Date(System.currentTimeMillis() + 60000) // 1 minute from now
+            todoViewModel.setReminder(0, "Test Reminder", testDate)
+        }
+    ) {
+        Text("Test Reminder (1 min)")
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -407,7 +452,7 @@ fun TodoApp(todoViewModel: TodoViewModel, onExport: () -> Unit, onImport: () -> 
                             imageUriToDownload = imageUri
                             downloadLauncher.launch("todo_image_${System.currentTimeMillis()}.jpg")
                         },
-                        onSetReminder = { id, date -> todoViewModel.setReminder(id, date) },
+                        onSetReminder = { id, taskTitle, date -> todoViewModel.setReminder(id, taskTitle, date) },
                         onRemoveReminder = { id -> todoViewModel.removeReminder(id) }
                     )
                 }
@@ -771,7 +816,7 @@ fun TodoList(
     onEditTodo: (Int, String, Uri?) -> Unit,
     onShowFullScreenImage: (String) -> Unit,
     onDownloadImage: (String) -> Unit,
-    onSetReminder: (Int, Date) -> Unit,
+    onSetReminder: (Int, String, Date) -> Unit,
     onRemoveReminder: (Int) -> Unit
 ) {
     LazyColumn(
@@ -803,7 +848,7 @@ fun TodoItem(
     onEdit: (Int, String, Uri?) -> Unit,
     onShowFullScreenImage: (String) -> Unit,
     onDownloadImage: (String) -> Unit,
-    onSetReminder: (Int, Date) -> Unit,
+    onSetReminder: (Int, String, Date) -> Unit,
     onRemoveReminder: (Int) -> Unit
 ) {
     var showDeletePrompt by remember { mutableStateOf(false) }
@@ -1026,7 +1071,7 @@ fun TodoItem(
             currentReminder = todo.reminder,
             onDismiss = { showReminderDialog = false },
             onSetReminder = { date ->
-                onSetReminder(todo.id, date)
+                onSetReminder(todo.id, todo.task, date)
                 showReminderDialog = false
             }
         )
