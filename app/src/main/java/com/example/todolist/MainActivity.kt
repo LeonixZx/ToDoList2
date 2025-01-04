@@ -83,6 +83,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import java.util.Date
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
+
 
 class MainActivity : ComponentActivity() {
     private companion object {
@@ -156,9 +161,24 @@ class MainActivity : ComponentActivity() {
                     onExport = { exportLauncher.launch("todos.json") },
                     onImport = { importLauncher.launch(arrayOf("application/json")) }
                 )
+                AdMobBanner()
             }
         }
         observeReminders()
+    }
+
+    @Composable
+    fun AdMobBanner() {
+        AndroidView(
+            factory = { context ->
+                AdView(context).apply {
+                    setAdSize(AdSize.BANNER)
+                    adUnitId = "ca-app-pub-3940256099942544/6300978111" // Test ad unit ID
+                    loadAd(AdRequest.Builder().build())
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 
     private var lastAdLoadAttempt = 0L
